@@ -28,6 +28,8 @@
 #ifndef OSM_H
 #define OSM_H
 
+#include "engine.h"
+
 #include <vector>
 #include <memory>
 #include <string>
@@ -501,7 +503,7 @@ namespace traffic
 		) const {
 			XMLMap map;
 			for (const OSMNode nd : (*nodeList)) {
-				if (funcNodes(nd)) map.addNode(nd);
+				if (funcNodes(nd)) map.addNode(nd, false);
 			}
 			for (const OSMWay wd : (*wayList)) {
 				if (funcWays(wd)) {
@@ -512,10 +514,11 @@ namespace traffic
 					}
 					if (!st->empty()) {
 						OSMWay w(wd.getID(), wd.getVer(), move(st), wd.getData());
-						map.addWay(w, *this);
+						map.addWay(w, *this, true, false);
 					}
 				}
 			}
+			map.recalculateBoundaries();
 			return map;
 		}
 

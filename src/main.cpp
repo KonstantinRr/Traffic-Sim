@@ -11,6 +11,8 @@
 	BSD-style license that can be found in the LICENSE.txt file.
 */
 
+#include "traffic/engine.h"
+
 #include <nanogui/screen.h>
 #include <nanogui/layout.h>
 #include <nanogui/window.h>
@@ -19,6 +21,8 @@
 #include <nanogui/shader.h>
 #include <nanogui/renderpass.h>
 #include <GLFW/glfw3.h>
+
+#include <algorithm>
 #include <iostream>
 #include <vector>
 
@@ -27,6 +31,7 @@
 #include "traffic/osm_mesh.h"
 #include "traffic/parser.hpp"
 #include "traffic/render.hpp"
+#include "traffic/agent.h"
 
 using namespace traffic;
 using namespace glm;
@@ -34,6 +39,7 @@ using namespace glm;
 #define NANOGUI_USE_OPENGL
 #if defined(_WIN32)
 #  define NOMINMAX
+#  define WIN32_LEAN_AND_MEAN
 #  if defined(APIENTRY)
 #    undef APIENTRY
 #  endif
@@ -46,7 +52,11 @@ using nanogui::Vector2i;
 using nanogui::Shader;
 using nanogui::Canvas;
 using nanogui::ref;
+using Vector2d = nanogui::Array<double, 2>;
+using Vector3d = nanogui::Array<double, 3>;
+using Vector4d = nanogui::Array<double, 4>;
 
+using view_t = double;
 constexpr float Pi = 3.14159f;
 
 std::shared_ptr<XMLMap> initMap()
@@ -95,56 +105,44 @@ class MapCanvas : public Canvas
 {
 protected:
 	ref<Shader> m_shader;
+	ref<Shader> m_chunk_shader;
+	
+	std::shared_ptr<XMLMap> map;
 	std::shared_ptr<std::vector<glm::vec3>> colors;
 	std::shared_ptr<std::vector<glm::vec2>> points;
+	std::shared_ptr<std::vector<glm::vec2>> chunks;
 	bool m_active;
+	bool m_render_chunk;
 
-	Vector2f position;
-	float m_zoom;
+	Vector2d position;
+	double m_zoom;
 
 public:
-	MapCanvas(Widget* parent) : Canvas(parent, 1) {
+	MapCanvas(Widget* parent, std::shared_ptr<XMLMap> map) : Canvas(parent, 1) {
 		using namespace nanogui;
-
+		this->map = map;
 		m_active = false;
-		position = { 0.0f, 0.0f };
-		m_zoom = 1.0f;
+		m_render_chunk = true;
+
+		auto centerPoint = map->getRect().getCenter();
+		position = {
+			static_cast<float>(-centerPoint.getLongitude()),
+			static_cast<float>(-centerPoint.getLatitude()) };
+		m_zoom = 25.0f;
 		m_shader = new Shader(
-			render_pass(),
-			"a_simple_shader", // An identifying name
-
-#if defined(NANOGUI_USE_OPENGL)
-			// Vertex shader
-			R"(#version 330
-			uniform mat4 mvp;
-
-            in vec2 vVertex;
-			in vec3 color;
-
-			out vec3 mixedColor;
-
-            void main(void)
-            {
-                gl_Position = mvp * vec4(vVertex, 0.0, 1.0);
-				mixedColor = color;
-            })",
-			// Fragment shader
-			R"(#version 330
-			in vec3 mixedColor;
-
-            out vec4 color;
-
-            void main() {
-                color = vec4(mixedColor, 1.0);
-            })"
-#endif
+			render_pass(), "shader_map",
+			getLineVertex(), getLineFragment()
+		);
+		m_chunk_shader = new Shader(
+			render_pass(), "shader_chunk",
+			getChunkVertex(), getChunkFragment()
 		);
 	}
 
-	Vector2f transformView(Vector2i vec) {
+	Vector2d transformView(Vector2i vec) {
 		return {
-			(float)vec.x() / width() * 2.0f - 1.0f,
-			(float)vec.y() / height() * 2.0f - 1.0f
+			(double)vec.x() / width() * 2.0 - 1.0,
+			(double)vec.y() / height() * 2.0 - 1.0
 		};
 	}
 
@@ -159,13 +157,20 @@ public:
 		const Vector2i& p, const Vector2i& rel, int button, int modifiers) override
 	{
 		Canvas::mouse_drag_event(p, rel, button, modifiers);
-		position += Vector2f(
-			(float)rel.x() * 2.0f / width(),
-			(float)-rel.y() * 1.0f / height()
+		position += Vector2d(
+			(double)rel.x() * 2.0 / width(),
+			(double)-rel.y() * 1.0 / height()
 		) / m_zoom;
+		printf("Current Pos (%lf %lf) at zoom %lf\n", position.x(), position.y(), m_zoom);
 		return true;
 	}
 	
+	virtual bool scroll_event(const Vector2i& p, const Vector2f& rel)
+	{
+		Canvas::scroll_event(p, rel);
+		m_zoom = std::clamp(m_zoom * pow(0.94, -rel.y()), 2.0, 1000.0);
+		return true;
+	}
 
 	void setData(
 		std::shared_ptr<std::vector<glm::vec3>> colors,
@@ -173,15 +178,25 @@ public:
 		using namespace nanogui;
 		this->colors = colors;
 		this->points = points;
-		m_shader->set_buffer("vVertex", VariableType::Float32, { points->size(), 2 }, points->data());
-		m_shader->set_buffer("color", VariableType::Float32, { colors->size(), 3 }, colors->data());
+		m_shader->set_buffer("vVertex", VariableType::Float32,
+			{ points->size(), 2 }, points->data());
+		m_shader->set_buffer("color", VariableType::Float32,
+			{ colors->size(), 3 }, colors->data());
+	}
+
+	void setChunkData(
+		std::shared_ptr<std::vector<glm::vec2>> points) {
+		using namespace nanogui;
+		this->chunks = points;
+		m_chunk_shader->set_buffer("vVertex", VariableType::Float32,
+			{ chunks->size(), 2 }, chunks->data());
 	}
 
 	void setActive(bool active) {
 		m_active = true;
 	}
 
-	void set_zoom(float zoom) {
+	void set_zoom(double zoom) {
 		m_zoom = zoom;
 	}
 
@@ -198,20 +213,26 @@ public:
 			m_shader->begin();
 			m_shader->draw_array(Shader::PrimitiveType::Line, 0, points->size(), false);
 			m_shader->end();
+
+			if (m_render_chunk)
+			{
+				m_chunk_shader->set_uniform("mvp", scale * matrix);
+				m_chunk_shader->set_uniform("color", Vector4f(1.0f, 0.0f, 0.0f, 1.0f));
+				m_chunk_shader->begin();
+				m_shader->draw_array(Shader::PrimitiveType::Line, 0, chunks->size(), false);
+				m_chunk_shader->end();
+			}
 		}
 	}
 
 	virtual bool keyboard_event(int key, int scancode, int action, int modifiers) {
-		int v = 1;
+		int v = 0;
 		switch (key) {
-			case GLFW_KEY_E:
-				m_zoom *= pow(0.94, -v);
-				return true;
-			case GLFW_KEY_R:
-				m_zoom *= pow(0.94, v);
-				return true;
+			case GLFW_KEY_E: v = -1; break;
+			case GLFW_KEY_R: v = 1; break;
 		}
-		return false;
+		m_zoom = std::clamp(m_zoom * pow(0.94, v), 2.0, 1000.0);
+		return v != 0;
 	}
 };
 
@@ -222,12 +243,15 @@ public:
 		Vector2i(800, 600), "TrafficSim", true)
 	{
 		using namespace nanogui;
-		map = initMap();
+		auto map = initMap();
+		world = std::make_shared<World>(map, 0.005);
 		auto points = std::make_shared<std::vector<glm::vec2>>(generateMesh(*map));
 		auto colors = std::make_shared<std::vector<glm::vec3>>(points->size(), glm::vec3(1.0f, 1.0f, 1.0f));
+		auto chunks = std::make_shared<std::vector<glm::vec2>>(generateChunkMesh(*world));
 
-		m_canvas = new MapCanvas(this);
+		m_canvas = new MapCanvas(this, map);
 		m_canvas->setData(colors, points);
+		m_canvas->setChunkData(chunks);
 		m_canvas->setActive(true);
 		m_canvas->set_background_color({ 100, 100, 100, 255 });
 
@@ -268,7 +292,7 @@ public:
 
 protected:
 	MapCanvas* m_canvas;
-	std::shared_ptr<XMLMap> map;
+	std::shared_ptr<World> world;
 };
 
 int main(int argc, char** argv)

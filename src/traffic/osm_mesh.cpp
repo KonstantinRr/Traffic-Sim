@@ -23,12 +23,17 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
+#include "engine.h"
+
 #include <vector>
 #include <limits>
 
+#include <glm/glm.hpp>
+
 #include "osm_mesh.h"
 #include "geom.h"
-#include <glm/glm.hpp>
+
+#define USE_OPENGL
 
 using namespace glm;
 using namespace traffic;
@@ -37,7 +42,7 @@ constexpr float Pi = 3.14159f;
 
 vec2 traffic::sphereToPlane(vec2 latLon, vec2 center) {
 	return vec2(
-		latLon.x * cos(center.y * Pi / 180.0),
+		latLon.x, //* cos(center.y * Pi / 180.0),
 		latLon.y
 	);
 }
@@ -59,11 +64,11 @@ std::vector<glm::vec2> traffic::generateMesh(const XMLMap& map) {
 			size_t lastNodeID = map.getNodeIndex(lastNode);
 			size_t currentNodeID = map.getNodeIndex(nds[i]);
 			glm::vec2 pos1(
-				nodeList[lastNodeID].getLon(),
-				nodeList[lastNodeID].getLat());
+				static_cast<float>(nodeList[lastNodeID].getLon()),
+				static_cast<float>(nodeList[lastNodeID].getLat()));
 			glm::vec2 pos2(
-				nodeList[currentNodeID].getLon(),
-				nodeList[currentNodeID].getLat());
+				static_cast<float>(nodeList[currentNodeID].getLon()),
+				static_cast<float>(nodeList[currentNodeID].getLat()));
 
 			points.push_back(sphereToPlane(pos1, center));
 			points.push_back(sphereToPlane(pos2, center));
@@ -71,6 +76,27 @@ std::vector<glm::vec2> traffic::generateMesh(const XMLMap& map) {
 		}
 	}
 
+	return points;
+}
+
+std::vector<glm::vec2> traffic::generateChunkMesh(const World& world)
+{
+	std::vector<glm::vec2> positions;
+	for (const WorldChunk& chunk : world.getChunks())
+	{
+		const Rect box = chunk.getBoundingBox();
+
+		positions.push_back(box.latLlonL().toVec());
+		positions.push_back(box.latLlonH().toVec());
+
+		positions.push_back(box.latLlonL().toVec());
+		positions.push_back(box.latHlonL().toVec());
+	}
+	return positions;
+}
+
+void traffic::unify(std::vector<glm::vec2>& points)
+{
 	float xMax = std::numeric_limits<float>::min();
 	float xMin = std::numeric_limits<float>::max();
 	float yMax = std::numeric_limits<float>::min();
@@ -87,6 +113,87 @@ std::vector<glm::vec2> traffic::generateMesh(const XMLMap& map) {
 		points[i] += glm::vec2(-xMin, -yMin);
 		points[i] /= scale;
 	}
+}
 
-	return points;
+// ---- Shaders ---- //
+const char * lineVert = R"(
+#version 330
+uniform mat4 mvp;
+
+in vec2 vVertex;
+in vec3 color;
+
+out vec3 mixedColor;
+
+void main(void)
+{
+	gl_Position = mvp * vec4(vVertex, 0.0, 1.0);
+	mixedColor = color;
+})";
+
+	// Fragment shader
+const char * lineFragment = R"(
+#version 330
+in vec3 mixedColor;
+
+out vec4 color;
+
+void main() {
+    color = vec4(mixedColor, 1.0);
+})";
+
+const char* traffic::getLineVertex()
+{
+#if defined(USE_OPENGL)
+	return lineVert;
+#else
+	return nullptr;
+#endif
+}
+const char* traffic::getLineFragment()
+{
+#if defined(USE_OPENGL)
+	return lineFragment;
+#else
+	return nullptr;
+#endif
+}
+
+const char* chunkVert = R"(
+#version 330
+uniform mat4 mvp;
+
+in vec2 vVertex;
+
+void main(void)
+{
+	gl_Position = mvp * vec4(vVertex, 0.0, 1.0);
+})";
+
+const char* chunkFragment = R"(
+#version 330
+uniform vec4 color;
+
+out vec4 outColor;
+
+void main() {
+    outColor = color;
+})";
+
+const char* traffic::getChunkVertex()
+{
+#if defined(USE_OPENGL)
+	return chunkVert;
+#else
+	return nullptr;
+#endif
+}
+
+const char* traffic::getChunkFragment()
+{
+#if defined(USE_OPENGL)
+	return chunkFragment;
+#else
+	return nullptr;
+#endif
 }

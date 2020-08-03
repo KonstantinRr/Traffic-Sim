@@ -4,10 +4,11 @@ set( CMAKE_VERBOSE_MAKEFILE ON )
 
 project( TrafficController )
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL "Enable A")
 set(NANOGUI_BUILD_SHARED OFF CACHE BOOL "Enable B")
+set(SPDLOG_FMT_EXTERNAL ON)
 
 set(SOURCE
    ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
@@ -37,8 +38,15 @@ target_include_directories(Controller PUBLIC
    ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/nanovg/src
    ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/nanovg_metal/include
    ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/pybind11/include
+   ${CMAKE_CURRENT_SOURCE_DIR}/spdlog/include
    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 add_subdirectory(nanogui)
-target_link_libraries(Controller nanogui)
+target_link_libraries(Controller PRIVATE nanogui)
+
+add_subdirectory(fmt)
+target_link_libraries(Controller PRIVATE fmt::fmt)
+
+add_subdirectory(spdlog)
+target_link_libraries(Controller PRIVATE spdlog::spdlog)

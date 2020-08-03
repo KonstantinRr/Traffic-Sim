@@ -28,12 +28,13 @@
 #ifndef GRAHP_HPP
 #define GRAHP_HPP
 
+#include "engine.h"
+
 #include <vector>
 #include <memory>
 #include <unordered_map>
 #include <glm/glm.hpp>
 
-#include "engine.h"
 #include "osm.h"
 
 namespace traffic
@@ -118,7 +119,7 @@ namespace traffic
 		/// by at least one way is appended as GraphNode to this graph</summary>
 		/// <param name="xmlmap">The OSM map that is converted</param>
 		/// <returns></returns>
-		Graph(std::shared_ptr<XMLMap> &xmlmap);
+		Graph(const std::shared_ptr<XMLMap> &xmlmap);
 
 		/// <summary>Applies the AStar (A*) path finding algorithm on the graph</summary>
 		/// <param name="start">The starting node ID</param>

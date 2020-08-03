@@ -28,9 +28,13 @@
 #ifndef AGENT_H
 #define AGENT_H
 
+#include "engine.h"
+
 #include <memory>
 
+#include "osm.h"
 #include "osm_graph.h"
+#include "geom.h"
 
 namespace traffic
 {
@@ -83,22 +87,80 @@ namespace traffic
         int64_t nextVisited;
     };
 
+    class WorldChunk
+    {
+    public:
+        WorldChunk();
+        WorldChunk(const Rect &rect);
+
+        const std::vector<int64_t> getNodes() const;
+        const std::vector<int64_t> getAgents() const;
+
+        bool containtsNode(int64_t id) const;
+        bool containsAgent(int64_t id) const;
+
+        void addNode(int64_t node);
+        void addAgent(int64_t agent);
+
+        int removeNode(int64_t node);
+        int removeAgent(int64_t agent);
+
+        void clearNodes();
+        void clearAgents();
+        void clear();
+
+        Rect getBoundingBox() const;
+        void setBoundingBox(const Rect &rect);
+
+    protected:
+        Rect boundingBox;
+        std::vector<int64_t> m_nodes;
+        std::vector<int64_t> m_agents;
+    };
+
     class World
     {
     public:
         // ---- Contstructors ---- //
-        World(const std::shared_ptr<Graph> &graph);
+        World(const std::shared_ptr<XMLMap> &map, prec_t chunkSize);
 
         // ---- Functions ---- //
 
-        std::shared_ptr<Graph>& getGraph();
-        std::vector<Agent>& getAgents();
+
+        const std::shared_ptr<Graph>& getGraph() const;
+        const std::vector<Agent>& getAgents() const;
+        const std::vector<WorldChunk>& getChunks() const;
+        void recalculateChunks();
+        
+        // ---- Coordinate transformation ---- //
+        size_t latCoordToGlobal(prec_t coord) const;
+        prec_t latGlobalToCoord(size_t global) const;
+        size_t latLocalToGlobal(size_t local) const;
+        size_t latGlobalToLocal(size_t global) const;
+        size_t latCoordToLocal(prec_t coord) const;
+        prec_t latLocalToCoord(size_t local) const;
+
+
+        size_t lonCoordToGlobal(prec_t coord) const;
+        prec_t lonGlobalToCoord(size_t global) const;
+        size_t lonLocalToGlobal(size_t local) const;
+        size_t lonGlobalToLocal(size_t global) const;
+        size_t lonCoordToLocal(prec_t coord) const;
+        prec_t lonLocalToCoord(size_t local) const;
+
+        size_t toStore(prec_t lat, prec_t lon) const;
+        size_t toStore(size_t localLat, size_t localLon) const;
 
     protected:
         // ---- Member definitions ---- //
-        std::shared_ptr<Graph> graph;
-        std::vector<Agent> agents;
+        prec_t m_chunkSize;
+        std::shared_ptr<XMLMap> m_map;
+        std::shared_ptr<Graph> m_graph;
+        std::vector<Agent> m_agents;
 
+        std::vector<WorldChunk> m_chunks;
+        size_t m_latChunks, m_lonChunks;
+        size_t m_latOffset, m_lonOffset;
     }; 
 } // namespace traffic
 

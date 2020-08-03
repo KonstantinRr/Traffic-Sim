@@ -23,6 +23,8 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
+#include "engine.h"
+
 #include "osm_graph.h"
 
 #include <limits>
@@ -95,7 +97,7 @@ void Route::addNode(int64_t nodeID) {
 
 // ---- Graph ---- //
 
-Graph::Graph(shared_ptr<XMLMap>& xmlmap)
+Graph::Graph(const shared_ptr<XMLMap>& xmlmap)
 {
 	this->xmlmap = xmlmap;
 	// Iterates throught the whole list of ways, and nodes for each way. The algorithm checks

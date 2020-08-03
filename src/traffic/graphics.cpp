@@ -23,6 +23,8 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
+#include "engine.h"
+
 #include <random>
 #include <stdlib.h>
 #include <math.h>

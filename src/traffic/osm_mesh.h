@@ -28,14 +28,25 @@
 #ifndef OSM_MESH_H
 #define OSM_MESH_H
 
+#include "engine.h"
+
 #include <glm/glm.hpp>
 
 #include "osm.h"
+#include "agent.h"
 
 namespace traffic
 {
     glm::vec2 sphereToPlane(glm::vec2 latLon, glm::vec2 center);
     std::vector<glm::vec2> generateMesh(const XMLMap& map);
+    std::vector<glm::vec2> generateChunkMesh(const World& world);
+    void unify(std::vector<glm::vec2> &points);
+
+    const char * getLineVertex();
+    const char * getLineFragment();
+
+    const char * getChunkVertex();
+    const char * getChunkFragment();
 }
 
 #endif

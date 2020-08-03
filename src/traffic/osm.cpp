@@ -23,13 +23,15 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
-#include "osm.h"
+#include "engine.h"
 
 #include <math.h>
 #include <memory>
 #include <vector>
 #include <string>
 #include <algorithm>
+
+#include "osm.h"
 
 using namespace std;
 using namespace traffic;
@@ -347,7 +349,7 @@ XMLMap::XMLMap(const json& json)
 	nodeList = make_shared<vector<OSMNode>>(json.at("nodes").get<vector<OSMNode>>());
 	wayList = make_shared<vector<OSMWay>>(json.at("ways").get<vector<OSMWay>>());
 	relationList = make_shared<vector<OSMRelation>>(json.at("relations").get<vector<OSMRelation>>());
-
+	recalculateBoundaries();
 	//nodeMap = make_shared<map_t>(json.at("node_map").get<map_t>());
 	//wayMap = make_shared<map_t>(json.at("way_map").get<map_t>());
 	//relationMap = make_shared<map_t>(json.at("relation_map").get<map_t>());

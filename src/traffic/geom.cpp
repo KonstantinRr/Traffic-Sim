@@ -23,10 +23,12 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
-#include "geom.h"
+#include "engine.h"
 
 #include <math.h>
 #include <algorithm>
+
+#include "geom.h"
 
 using namespace std;
 using namespace traffic;
@@ -48,6 +50,11 @@ Point Point::operator-(const Distance& point) const
 Distance Point::distanceTo(const Point& point) const
 { return Distance(lat - point.getLatitude(), lon - point.getLongitude()); }
 
+glm::vec2 traffic::Point::toVec() const
+{
+	return glm::vec2(lon, lat);
+}
+
 /*
 XMLMap XMLMap::findCircleNode(const Circle &circle)
 {
@@ -59,11 +66,19 @@ XMLMap XMLMap::findCircleNode(const Circle &circle)
 
 Rect Rect::fromBorders(prec_t lowerLat, prec_t upperLat, prec_t lowerLon, prec_t upperLon)
 {
-	prec_t diffLat = upperLat - lowerLat;
-	prec_t diffLon = upperLon - lowerLon;
+	prec_t diffLat2 = (upperLat - lowerLat) / 2;
+	prec_t diffLon2 = (upperLon - lowerLon) / 2;
 	return Rect(
-		Point(lowerLat + diffLat / 2, lowerLon + diffLon / 2),
-		diffLat / 2, diffLon / 2
+		Point(lowerLat + diffLat2, lowerLon + diffLon2),
+		diffLat2, diffLon2
+	);
+}
+
+Rect traffic::Rect::fromLength(prec_t lowerLat, prec_t lowerLon, prec_t latLength, prec_t lonLength)
+{
+	return Rect(
+		Point(lowerLat + latLength * 0.5, lowerLon + lonLength * 0.5),
+		latLength * 0.5, lonLength * 0.5
 	);
 }
 
@@ -99,6 +114,11 @@ Point Rect::latHlonH() const { return center + Distance(latLength, lonLength); }
 Point Rect::latHlonL() const { return center + Distance(latLength, -lonLength); }
 Point Rect::latLlonH() const { return center + Distance(-latLength, lonLength); }
 Point Rect::latLlonL() const { return center + Distance(-latLength, -lonLength); }
+
+void traffic::Rect::summary() const
+{
+	
+}
 
 Rect& Rect::performScaleLat(prec_t scale) {
 	latLength *= scale;

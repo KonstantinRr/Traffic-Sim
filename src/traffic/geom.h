@@ -30,6 +30,8 @@
 
 #include "engine.h"
 
+#include <glm/glm.hpp>
+
 namespace traffic
 {
 	class Point;	// basic point defined by latitude and longitude
@@ -63,6 +65,7 @@ namespace traffic
 		Point operator-(const Distance& point) const;
 
 		Distance distanceTo(const Point& point) const;
+		glm::vec2 toVec() const;
 	};
 
 	/// The distance class describes a distance using
@@ -116,6 +119,8 @@ namespace traffic
 		/// prec_t lowerLon: Lower longitude boundary
 		/// prec_t upperLon: Upper longitude boundary
 		static Rect fromBorders(prec_t lowerLat, prec_t upperLat, prec_t lowerLon, prec_t upperLon);
+		static Rect fromLength(prec_t lowerLat, prec_t lowerLon, prec_t latLength, prec_t lonLength);
+		
 		/// Creates a rect from a center point and the distances from
 		/// the center to the sides.
 		/// Point center: Center point of this rect
@@ -154,6 +159,7 @@ namespace traffic
 		inline prec_t latDistance() const { return 2 * latLength; }
 		inline prec_t lonDistance() const { return 2 * lonLength;}
 
+		void summary() const;
 
 		Rect& performScaleLat(prec_t scale);
 		Rect& performScaleLon(prec_t scale);

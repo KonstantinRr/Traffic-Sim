@@ -23,7 +23,7 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
-#define _CRT_SECURE_NO_WARNINGS 1
+#include "engine.h"
 
 #include <chrono>
 #include <fstream>
@@ -478,7 +478,7 @@ XMLMap traffic::parseXMLMap(const string& file)
 
 	// Prints some diagnostics about the program
 	auto endRead = chrono::high_resolution_clock::now();
-	printf("Parsed %d ways and %d nodes. Took %dms, Total %dms",
+	printf("Parsed %d ways and %d nodes. Took %dms, Total %dms\n",
 		wayList.size(), nodeList.size(),
 		duration_cast<milliseconds>(endRead - endParse).count(),
 		duration_cast<milliseconds>(endRead - begin).count());

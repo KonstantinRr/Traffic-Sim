@@ -23,6 +23,8 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
+#include "engine.h"
+
 #include "render.hpp"
 
 using namespace traffic;
@@ -31,34 +33,6 @@ using namespace lt;
 void renderMap(const XMLMap&, prec_t)
 {
 }
-
-/*
-MeshBuilder2D traffic::convertToMesh(const XMLMap &map) {
-	MeshBuilder2D builder;
-	vector<OSMNode>& nodeList = *(map.getNodes());
-
-	for (const OSMWay& wd : (*map.getWays())) {
-		auto& nds = wd.getNodes();
-		if (nds.empty()) continue;
-	
-		int64_t lastNode = nds[0];
-		for (size_t i = 1; i < nds.size(); i++) {
-			size_t lastNodeID = map.getNodeIndex(lastNode);
-			size_t currentNodeID = map.getNodeIndex(nds[i]);
-			glm::vec2 pos1(
-				nodeList[lastNodeID].getLon(),
-				nodeList[lastNodeID].getLat());
-			glm::vec2 pos2(
-				nodeList[currentNodeID].getLon(),
-				nodeList[currentNodeID].getLat());
-
-			builder.addLineRect(pos1, pos2, 0.0001f);
-			lastNode = nds[i];
-		}
-	}
-	return builder;
-}
-*/
 
 // TODO implement random alpha colors
 

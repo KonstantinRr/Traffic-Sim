@@ -29,9 +29,12 @@
 #ifndef ENGINE_H
 #define ENGINE_H
 
+#define SPDLOG_FMT_EXTERNAL
+#define _CRT_SECURE_NO_WARNINGS 1
+
 using float32 = float;
 using float64 = double;
 
-using prec_t = float32;
+using prec_t = double;
 
 #endif
