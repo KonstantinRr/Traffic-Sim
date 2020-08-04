@@ -4,7 +4,7 @@ set( CMAKE_VERBOSE_MAKEFILE ON )
 
 project( TrafficController )
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL "Enable A")
 set(NANOGUI_BUILD_SHARED OFF CACHE BOOL "Enable B")
@@ -20,6 +20,7 @@ set(SOURCE
    ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/render.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm_graph.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/agent.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/engine.cpp
 )
 #set(HEADERS
 #   ${HEADERS}
@@ -39,6 +40,7 @@ target_include_directories(Controller PUBLIC
    ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/nanovg_metal/include
    ${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/pybind11/include
    ${CMAKE_CURRENT_SOURCE_DIR}/spdlog/include
+   ${CMAKE_CURRENT_SOURCE_DIR}/fmt/include
    ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 

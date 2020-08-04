@@ -140,8 +140,10 @@ World::World(const std::shared_ptr<XMLMap>& map, prec_t chunkSize)
     this->m_chunkSize = chunkSize;
     this->m_map = map;
     this->m_graph = std::make_shared<Graph>(map);
+    recalculateChunks();
 }
 
+const std::shared_ptr<XMLMap>& traffic::World::getMap() const { return m_map; }
 const std::shared_ptr<Graph>& World::getGraph() const { return m_graph; }
 const std::vector<Agent>& World::getAgents() const { return m_agents; }
 const std::vector<WorldChunk>& traffic::World::getChunks() const { return m_chunks; }
@@ -225,7 +227,7 @@ void traffic::World::recalculateChunks()
     m_chunks = std::vector<WorldChunk>(m_latChunks * m_lonChunks);
     for (size_t lat = 0; lat < m_latChunks; lat++)
     {
-        for (size_t lon = lon; lon < m_lonChunks; lon++)
+        for (size_t lon = 0; lon < m_lonChunks; lon++)
         {
             Rect rect = Rect::fromLength(
                 latLocalToCoord(lat), lonLocalToCoord(lon),

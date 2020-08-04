@@ -26,6 +26,8 @@
 #include <iostream>
 #include <vector>
 
+#include <cptl.hpp>
+
 #include "traffic/osm.h"
 #include "traffic/osm_graph.h"
 #include "traffic/osm_mesh.h"
@@ -37,14 +39,6 @@ using namespace traffic;
 using namespace glm;
 
 #define NANOGUI_USE_OPENGL
-#if defined(_WIN32)
-#  define NOMINMAX
-#  define WIN32_LEAN_AND_MEAN
-#  if defined(APIENTRY)
-#    undef APIENTRY
-#  endif
-#  include <windows.h>
-#endif
 
 using nanogui::Vector3f;
 using nanogui::Vector2f;
@@ -57,9 +51,8 @@ using Vector3d = nanogui::Array<double, 3>;
 using Vector4d = nanogui::Array<double, 4>;
 
 using view_t = double;
-constexpr float Pi = 3.14159f;
 
-std::shared_ptr<XMLMap> initMap()
+std::shared_ptr<XMLMap> initMap(ctpl::thread_pool &pool)
 {
 	// Groningen coordinates
 	// tl,tr [53.265301,6.465842][53.265301,6.675939]
@@ -74,15 +67,18 @@ std::shared_ptr<XMLMap> initMap()
 		51.9362, 51.9782, 7.9553, 8.0259);
 
 	auto map = std::make_shared<XMLMap>(
-		parseXMLMap("warendorf.xmlmap"));
+		parseXMLMap("warendorf.xmlmap", pool));
 
 	map->summary();
+	
 	*map = map->findSquareNodes(initRect);
-	//*map = map->findNodes(
-	//	[](const OSMNode& nd) { return nd.hasTag("highway"); },
-	//	[](const OSMWay& wd) { return wd.hasTag("highway"); },
-	//	[](const OSMWay&, const OSMNode&) { return true; }
-	//);
+	/*
+	*map = map->findNodes(
+		[](const OSMNode& nd) { return nd.hasTag("highway"); },
+		[](const OSMWay& wd) { return wd.hasTag("highway"); },
+		[](const OSMWay&, const OSMNode&) { return true; }
+	);
+	*/
 	map->summary();
 	return map;
 
@@ -124,26 +120,26 @@ public:
 		m_active = false;
 		m_render_chunk = true;
 
-		auto centerPoint = map->getRect().getCenter();
+		auto centerPoint = sphereToPlane(map->getRect().getCenter().toVec());
 		position = {
-			static_cast<float>(-centerPoint.getLongitude()),
-			static_cast<float>(-centerPoint.getLatitude()) };
+			static_cast<float>(-centerPoint.x),
+			static_cast<float>(-centerPoint.y)};
 		m_zoom = 25.0f;
-		m_shader = new Shader(
-			render_pass(), "shader_map",
-			getLineVertex(), getLineFragment()
-		);
 		m_chunk_shader = new Shader(
 			render_pass(), "shader_chunk",
 			getChunkVertex(), getChunkFragment()
 		);
+		m_shader = new Shader(
+			render_pass(), "shader_map",
+			getLineVertex(), getLineFragment()
+		);
 	}
 
 	Vector2d transformView(Vector2i vec) {
-		return {
-			(double)vec.x() / width() * 2.0 - 1.0,
-			(double)vec.y() / height() * 2.0 - 1.0
-		};
+		return Vector2d(
+			(double)vec.x() * 2.0 / width(),
+			(double)-vec.y() * 1.0 / height()
+		);
 	}
 
 	
@@ -157,11 +153,7 @@ public:
 		const Vector2i& p, const Vector2i& rel, int button, int modifiers) override
 	{
 		Canvas::mouse_drag_event(p, rel, button, modifiers);
-		position += Vector2d(
-			(double)rel.x() * 2.0 / width(),
-			(double)-rel.y() * 1.0 / height()
-		) / m_zoom;
-		printf("Current Pos (%lf %lf) at zoom %lf\n", position.x(), position.y(), m_zoom);
+		position += transformView(rel) / m_zoom;
 		return true;
 	}
 	
@@ -200,6 +192,22 @@ public:
 		m_zoom = zoom;
 	}
 
+	void updateKeys() {
+		//TrafficApplication* app = static_cast<TrafficApplication*>(parent());
+		/*
+		window().
+		int v = 0;
+		double arrowSpeed = 0.05;
+		case GLFW_KEY_E: v = -1; break;
+		case GLFW_KEY_R: v = 1; break;
+		case GLFW_KEY_LEFT:		position += Vector2d(-arrowSpeed, 0.0) / m_zoom; break;
+		case GLFW_KEY_RIGHT:	position += Vector2d(arrowSpeed, 0.0) / m_zoom; break;
+		case GLFW_KEY_UP:		position += Vector2d(0.0, -arrowSpeed) / m_zoom; break;
+		case GLFW_KEY_DOWN:		position += Vector2d(0.0, arrowSpeed) / m_zoom; break;
+		m_zoom = std::clamp(m_zoom * pow(0.94, v), 2.0, 1000.0);
+		*/
+	}
+
 	virtual void draw_contents() override {
 		using namespace nanogui;
 		set_size(parent()->size());
@@ -207,12 +215,7 @@ public:
 			Matrix4f matrix = Matrix4f::translate(
 				Vector3f(position.x(), position.y(), 0.0f));
 			Matrix4f scale = Matrix4f::scale(
-				Vector3f(1.0 * m_zoom, 2.0 * m_zoom, 1.0f));
-
-			m_shader->set_uniform("mvp", scale * matrix);
-			m_shader->begin();
-			m_shader->draw_array(Shader::PrimitiveType::Line, 0, points->size(), false);
-			m_shader->end();
+				Vector3f(m_zoom, m_zoom * width() / height(), 1.0f));
 
 			if (m_render_chunk)
 			{
@@ -222,14 +225,24 @@ public:
 				m_shader->draw_array(Shader::PrimitiveType::Line, 0, chunks->size(), false);
 				m_chunk_shader->end();
 			}
+
+			m_shader->set_uniform("mvp", scale * matrix);
+			m_shader->begin();
+			m_shader->draw_array(Shader::PrimitiveType::Line, 0, points->size(), false);
+			m_shader->end();
 		}
 	}
 
-	virtual bool keyboard_event(int key, int scancode, int action, int modifiers) {
+	virtual bool keyboard_event(int key, int scancode, int action, int modifiers) override {
 		int v = 0;
+		double arrowSpeed = 0.05;
 		switch (key) {
 			case GLFW_KEY_E: v = -1; break;
 			case GLFW_KEY_R: v = 1; break;
+			case GLFW_KEY_LEFT:		position += Vector2d(-arrowSpeed, 0.0) / m_zoom; break;
+			case GLFW_KEY_RIGHT:	position += Vector2d(arrowSpeed, 0.0) / m_zoom; break;
+			case GLFW_KEY_UP:		position += Vector2d(0.0, -arrowSpeed) / m_zoom; break;
+			case GLFW_KEY_DOWN:		position += Vector2d(0.0, arrowSpeed) / m_zoom; break;
 		}
 		m_zoom = std::clamp(m_zoom * pow(0.94, v), 2.0, 1000.0);
 		return v != 0;
@@ -240,10 +253,11 @@ class TrafficApplication : public nanogui::Screen
 {
 public:
 	TrafficApplication() : nanogui::Screen(
-		Vector2i(800, 600), "TrafficSim", true)
+		Vector2i(800, 600), "TrafficSim", true),
+		pool(8)
 	{
 		using namespace nanogui;
-		auto map = initMap();
+		auto map = initMap(pool);
 		world = std::make_shared<World>(map, 0.005);
 		auto points = std::make_shared<std::vector<glm::vec2>>(generateMesh(*map));
 		auto colors = std::make_shared<std::vector<glm::vec3>>(points->size(), glm::vec3(1.0f, 1.0f, 1.0f));
@@ -291,6 +305,7 @@ public:
 	}
 
 protected:
+	ctpl::thread_pool pool;
 	MapCanvas* m_canvas;
 	std::shared_ptr<World> world;
 };

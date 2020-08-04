@@ -34,9 +34,12 @@
 
 #include "osm.h"
 
+class thread_pool;
+
 namespace traffic {
 	std::vector<unsigned char> writeXOSMMap(const XMLMap &map, const std::string &file);
-	XMLMap parseXMLMap(const std::string &file);
+	XMLMap parseXMLMap(const std::string& file);
+	XMLMap parseXMLMap(const std::string &file, ctpl::thread_pool& pool);
 } // namespace traffic
 
 #endif

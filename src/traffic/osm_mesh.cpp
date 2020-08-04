@@ -36,13 +36,22 @@
 #define USE_OPENGL
 
 using namespace glm;
+using namespace std;
 using namespace traffic;
 
 constexpr float Pi = 3.14159f;
 
 vec2 traffic::sphereToPlane(vec2 latLon, vec2 center) {
 	return vec2(
-		latLon.x, //* cos(center.y * Pi / 180.0),
+		(float)(latLon.x * cos((double)center.y * Pi / 180.0)),
+		latLon.y
+	);
+}
+
+glm::vec2 traffic::sphereToPlane(glm::vec2 latLon)
+{
+	return vec2(
+		(float)(latLon.x * cos((double)latLon.y * Pi / 180.0)),
 		latLon.y
 	);
 }
@@ -82,15 +91,23 @@ std::vector<glm::vec2> traffic::generateMesh(const XMLMap& map) {
 std::vector<glm::vec2> traffic::generateChunkMesh(const World& world)
 {
 	std::vector<glm::vec2> positions;
+	glm::vec2 center = world.getMap()->getRect().getCenter().toVec();
 	for (const WorldChunk& chunk : world.getChunks())
 	{
 		const Rect box = chunk.getBoundingBox();
+		cout << box.summary() << endl;
 
-		positions.push_back(box.latLlonL().toVec());
-		positions.push_back(box.latLlonH().toVec());
+		positions.push_back(sphereToPlane(box.latLlonL().toVec(), center));
+		positions.push_back(sphereToPlane(box.latLlonH().toVec(), center));
 
-		positions.push_back(box.latLlonL().toVec());
-		positions.push_back(box.latHlonL().toVec());
+		positions.push_back(sphereToPlane(box.latLlonL().toVec(), center));
+		positions.push_back(sphereToPlane(box.latHlonL().toVec(), center));
+
+		positions.push_back(sphereToPlane(box.latHlonH().toVec(), center));
+		positions.push_back(sphereToPlane(box.latHlonL().toVec(), center));
+
+		positions.push_back(sphereToPlane(box.latHlonH().toVec(), center));
+		positions.push_back(sphereToPlane(box.latLlonH().toVec(), center));
 	}
 	return positions;
 }

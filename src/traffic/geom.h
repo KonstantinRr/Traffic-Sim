@@ -30,6 +30,7 @@
 
 #include "engine.h"
 
+#include <string>
 #include <glm/glm.hpp>
 
 namespace traffic
@@ -159,7 +160,7 @@ namespace traffic
 		inline prec_t latDistance() const { return 2 * latLength; }
 		inline prec_t lonDistance() const { return 2 * lonLength;}
 
-		void summary() const;
+		std::string summary() const;
 
 		Rect& performScaleLat(prec_t scale);
 		Rect& performScaleLon(prec_t scale);

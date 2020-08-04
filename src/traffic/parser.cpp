@@ -31,8 +31,13 @@
 #include <limits>
 #include <algorithm>
 #include <exception>
+#include <atomic>
+#include <thread>
+#include <mutex>
+
 #include "rapidxml/rapidxml.hpp"
 #include "rapidxml/rapidxml_print.hpp"
+#include <cptl.hpp>
 
 #include "parser.hpp"
 
@@ -42,6 +47,14 @@ using namespace chrono;
 
 using namespace traffic;
 
+using map_t = robin_hood::unordered_node_map<int64_t, size_t>;
+
+/// <summary>Converts a string to an template argument by using the
+/// converter function</summary>
+/// <typeparam name="C">Conversion functor type</typeparam>
+/// <param name="val">The string that is converted</param>
+/// <param name="conv">The conversion funtor that is used</param>
+/// <returns>The value t</returns>
 template<typename C>
 auto conversion(const string& val, const C& conv) {
 	try {
@@ -76,31 +89,475 @@ T parse(const string& str) {
 
 int readFile(vector<char> &data, const string &file) {
 	FILE *f = fopen(file.c_str(), "rb");
-	if (!f) {
-		return -1;
-	}
+	if (!f) return -1;
+	
 	fseek(f, 0, SEEK_END);
 	long fsize = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
-	data.resize(fsize + 1);
+	data.resize(static_cast<size_t>(fsize) + 1);
 	fread(data.data(), 1, fsize, f);
 	fclose(f);
 
-	data[fsize] = 0;
+	data[fsize] = 0; // null byte terminator
 	return 0;
 }
 
+template<typename T, typename E>
+bool tryMerge(std::vector<T>& vec, AtomicLock& lock, E&& function)
+{
+	if (vec.size() >= 1024 * 16) {
+		if (lock.try_lock()) {
+			function();
+			lock.unlock();
+			return true;
+		}
+	}
+	return false;
+}
 
-XMLMap traffic::parseXMLMap(const string& file)
+struct ParseInfo
+{
+	// READ ACCESS ONLY //
+	xml_document<char> doc;
+	xml_node<char>* osm_node = nullptr;
+	xml_node<char>* meta_node = nullptr;
+
+	// LOCK ACCESS //
+	AtomicLock lockNodes;
+	AtomicLock lockWays;
+	AtomicLock lockRelations;
+
+	// ACCESS after lock aquire //
+	vector<OSMNode> nodeList;
+	vector<OSMWay> wayList;
+	vector<OSMRelation> relationList;
+
+	map_t nodeMap;
+	map_t wayMap;
+	map_t relationMap;
+};
+
+struct LocalParseInfo
+{
+	// Thread information //
+	int start, stride;
+	bool merge = true;
+	size_t bufferSize = 16 * 1024;
+	size_t mergeSize = 8 * 1024;
+};
+
+class ParseTask
+{
+public:
+	ParseTask(ParseInfo *info, LocalParseInfo local);
+
+	void forceMergeNodes();
+	void forceMergeWays();
+	void forceMergeRelations();
+
+	void updateNodes();
+	void updateWays();
+	void updateRelations();
+
+	bool operator()(int id);
+	bool parseNode(xml_node<char>* singleNode);
+	bool parseWay(xml_node<char>* singleNode);
+	bool parseRelation(xml_node<char>* singleNode);
+
+	bool parseTag(xml_node<char>* node, vector<pair<string, string>> &tagList);
+protected:
+	// Global parse data //
+	ParseInfo* info;
+	LocalParseInfo local;
+
+	// Local storage for merging //
+	vector<OSMNode> localNodeList;
+	vector<OSMWay> localWayList;
+	vector<OSMRelation> localRelationList;
+};
+
+ParseTask::ParseTask(ParseInfo* info, LocalParseInfo local)
+{
+	this->info = info;
+	this->local = local;
+}
+
+void ParseTask::forceMergeNodes()
+{
+	if (!localNodeList.empty()) {
+		scoped_lock lock(info->lockNodes);
+		updateNodes();
+	}
+}
+
+void ParseTask::forceMergeWays()
+{
+	if (!localWayList.empty()) {
+		scoped_lock lock(info->lockWays);
+		updateWays();
+	}
+}
+
+void ParseTask::forceMergeRelations()
+{
+	if (!localRelationList.empty()) {
+		scoped_lock lock(info->lockRelations);
+		updateRelations();
+	}
+}
+
+void ParseTask::updateNodes()
+{
+	info->nodeList.reserve(info->nodeList.size() + localNodeList.size());
+	for (size_t i = 0; i < localNodeList.size(); i++) {
+		info->nodeMap[localNodeList[i].getID()] = info->nodeList.size();
+		info->nodeList.push_back(std::move(localNodeList[i]));
+	}
+	localNodeList.clear();
+}
+
+void ParseTask::updateWays()
+{
+	info->wayList.reserve(info->wayList.size() + localWayList.size());
+	for (size_t i = 0; i < localWayList.size(); i++) {
+		info->wayMap[localWayList[i].getID()] = info->wayList.size();
+		info->wayList.push_back(std::move(localWayList[i]));
+	}
+	localWayList.clear();
+}
+
+void ParseTask::updateRelations()
+{
+	info->relationList.reserve(info->relationList.size() + localRelationList.size());
+	for (size_t i = 0; i < localRelationList.size(); i++) {
+		info->relationMap[localRelationList[i].getID()] = info->relationList.size();
+		info->relationList.push_back(std::move(localRelationList[i]));
+	}
+	localRelationList.clear();
+}
+
+bool ParseTask::operator()(int id)
+{
+	// Skips the first offset nodes
+	xml_node<char>* singleNode = info->osm_node->first_node();
+	for (int i = 0; singleNode && i < local.start; i++) {
+		singleNode = singleNode->next_sibling();
+	}
+
+	localNodeList.reserve(local.bufferSize);
+	localWayList.reserve(local.bufferSize);
+	localRelationList.reserve(local.bufferSize);
+
+	/// Iterates over every node in this document
+	for (int i = local.stride; singleNode; i++,
+		singleNode = singleNode->next_sibling())
+	{
+		if (i != local.stride) continue;
+		i = 0;
+
+		string nodeString = singleNode->name();
+		if (nodeString == "node") {
+			parseNode(singleNode);
+			if (local.merge) {
+				tryMerge(localNodeList, info->lockNodes,
+					[this]() { this->updateNodes(); });
+			}
+		}
+		else if (nodeString == "way") {
+			parseWay(singleNode);
+			if (local.merge) {
+				tryMerge(localWayList, info->lockWays,
+					[this]() { this->updateWays(); });
+			}
+		}
+		else if (nodeString == "relation") {
+			parseRelation(singleNode);
+			if (local.merge) {
+				tryMerge(localRelationList, info->lockRelations,
+					[this]() { this->updateRelations(); });
+			}
+		}
+		else {
+			printf("Unknown XML node: %s\n", nodeString.c_str());
+		}
+	}
+	forceMergeNodes();
+	forceMergeWays();
+	forceMergeRelations();
+	return true;
+}
+
+bool ParseTask::parseNode(xml_node<char>* singleNode)
+{
+	// Tries parsing the basic node attributes.
+	// The parser must find all of the following attributes to continue parsing.
+	xml_attribute<char>* idAtt = singleNode->first_attribute("id");
+	xml_attribute<char>* latAtt = singleNode->first_attribute("lat");
+	xml_attribute<char>* lonAtt = singleNode->first_attribute("lon");
+	xml_attribute<char>* verAtt = singleNode->first_attribute("version");
+
+	if (idAtt == nullptr) printf("ID attribute is nullptr (skipping node)\n");
+	if (verAtt == nullptr) printf("VERSION attribute is nullptr (skipping node)\n");
+	if (latAtt == nullptr) printf("LAT attribute is nullptr (skipping node)\n");
+	if (lonAtt == nullptr) printf("LON attribute is nullptr (skipping node)\n");
+	// Checks if each attributee was found.
+	if (!idAtt || !verAtt || !latAtt || !lonAtt) return false;
+
+	// Tries parsing the arguments to the correct internal representation.
+	// The node is skipped if any errors occur during parsing.
+	int64_t id;
+	int32_t ver;
+	prec_t lat, lon;
+	try {
+		id = parse<int64_t>(idAtt->value());
+		ver = parse<int32_t>(verAtt->value());
+		lat = parseDouble(latAtt->value());
+		lon = parseDouble(lonAtt->value());
+	}
+	catch (runtime_error&) {
+		printf("Could not convert node parameter to integer argument\n");
+		return false;
+	}
+
+	// Tries parsing the the list of tags attached to this node.
+	// Every tag is build in the format <tag k="..." v="...">.
+	// The attribute is skipped if the parser cannot find both attributes.
+	shared_ptr<vector<pair<string, string>>> tags
+		= make_shared<vector<pair<string, string>>>();
+
+	for (xml_node<char>* tagNode = singleNode->first_node();
+		tagNode; tagNode = tagNode->next_sibling())
+	{
+
+		string tagNodeName = tagNode->name();
+		if (tagNodeName == "tag") {
+			parseTag(tagNode, *tags);
+		}
+		else {
+			printf("Unknown tag in node %s, skipping tag entry\n", tagNodeName.c_str());
+		}
+	}
+	// Shrinks the vector to save memory.
+	vector<pair<string, string>>(*tags).swap(*tags);
+
+	// Successfully parsed the whole node. The node will be added to the node list.
+	// A reference to the index will be saved inside the dictionary at a later point.
+	OSMNode nd(id, ver, tags, lat, lon);
+	localNodeList.push_back(nd);
+
+	return true;
+}
+
+bool ParseTask::parseWay(xml_node<char>* singleNode)
+{
+	// Tries parsing the basic way attributes.
+	// The parser must find all of the following attributes to continue parsing.
+	xml_attribute<char>* idAtt = singleNode->first_attribute("id");
+	xml_attribute<char>* verAtt = singleNode->first_attribute("version");
+
+	if (idAtt == nullptr) printf("ID attribute is nullptr (skipping node)\n");
+	if (verAtt == nullptr) printf("VERSION attribute is nullptr (skipping node)\n");
+	// Checks if each attributee was found.
+	if (!idAtt || !verAtt) return false;
+
+
+	// Tries casting the way attributes to numeric values.
+	// The parser must be able to convert all values to continue.
+	int64_t id;
+	int32_t ver;
+	try {
+		id = parse<int64_t>(idAtt->value());
+		ver = parse<int32_t>(verAtt->value());
+	}
+	catch (runtime_error&) {
+		printf("Could not convert way parameter to integer argument\n");
+		return false;
+	}
+
+	// Parses all child nodes that are attached to this nodes. Child nodes may
+	// either be tags of the format <tag k="..." v="..."> or node references.
+	shared_ptr<vector<int64_t>> wayInfo =
+		make_shared<vector<int64_t>>();
+	shared_ptr<vector<pair<string, string>>> tags =
+		make_shared<vector<pair<string, string>>>();
+
+	for (xml_node<char>* wayNode = singleNode->first_node();
+		wayNode; wayNode = wayNode->next_sibling())
+	{
+		string wayNodeName = wayNode->name();
+
+		// Tries parsing a node reference. Nodes are defined by the tag 'nd'.
+		// Every node tag has a reference integer giving the node's ID.
+		if (wayNodeName == "nd") {
+			xml_attribute<char>* refAtt = wayNode->first_attribute("ref");
+
+			if (refAtt == nullptr) {
+				printf("Ref attribute of way is not defined, skipping tag\n");
+				continue;
+			}
+
+			int64_t ref;
+			try {
+				ref = parse<int64_t>(refAtt->value());
+			}
+			catch (runtime_error&) {
+				printf("Could not cast ref attribute, skipping tag\n");
+				continue;
+			}
+			wayInfo->push_back(ref);
+		}
+
+		// Tries parsing a tag. A tag needs to have a key and
+		// value defined by 'k' and 'v'.
+		else if (wayNodeName == "tag") {
+			parseTag(wayNode, *tags);
+		}
+		// Could not parse the way child node.
+		else {
+			printf("Unknown way child node: %s\n", wayNodeName.c_str());
+		}
+	}
+	// shrinks the tags to save memory
+	vector<pair<string, string>>(*tags).swap(*tags);
+	vector<int64_t>(*wayInfo).swap(*wayInfo);
+
+	localWayList.push_back(OSMWay(id, ver, move(wayInfo), tags));
+	return true;
+}
+
+bool ParseTask::parseRelation(xml_node<char>* singleNode)
+{
+	// Tries parsing the basic attributes.
+			// The parser must find all attributes to continue.
+	xml_attribute<char>* idAtt = singleNode->first_attribute("id");
+	xml_attribute<char>* verAtt = singleNode->first_attribute("version");
+
+	if (idAtt == nullptr) printf("ID attribute is nullptr (skipping relation)\n");
+	if (verAtt == nullptr) printf("VERSION attribute is nullptr (skipping relation)\n");
+	
+	if (!idAtt || !verAtt) return false;
+
+	// Tries casting the way attributes to numeric values.
+	// The parser must be able to convert all values to continue.
+	int64_t id;
+	int32_t ver;
+	try {
+		id = parse<int64_t>(idAtt->value());
+		ver = parse<int32_t>(verAtt->value());
+	}
+	catch (runtime_error&) {
+		printf("Could not convert relation parameter to integer argument\n");
+		return false;
+	}
+
+
+	shared_ptr<vector<RelationMember>> nodeRel = make_shared<vector<RelationMember>>();
+	shared_ptr<vector<RelationMember>> wayRel = make_shared<vector<RelationMember>>();
+	shared_ptr<vector<RelationMember>> relationRel = make_shared<vector<RelationMember>>();
+	shared_ptr<vector<pair<string, string>>> tags = make_shared<vector<pair<string, string>>>();
+
+	for (xml_node<char>* childNode = singleNode->first_node();
+		childNode; childNode = childNode->next_sibling())
+	{
+		string childNodeName = childNode->name();
+		/// Tries parsing a member node. Every member node is
+		/// either a reference to a way or to a node. They are
+		/// required to have a 'type', 'ref' and 'role' tag.
+		/// The parser must find all these tags to continue.
+		if (childNodeName == "member") {
+			xml_attribute<char>* typeAtt = childNode->first_attribute("type");
+			xml_attribute<char>* indexAtt = childNode->first_attribute("ref");
+			xml_attribute<char>* roleAtt = childNode->first_attribute("role");
+
+			if (typeAtt == nullptr) {
+				printf("Member type is nullptr, skipping entry in relation\n");
+				continue;
+			}
+			if (indexAtt == nullptr) {
+				printf("Index attribute is nullptr, skipping entry in relation\n");
+				continue;
+			}
+			if (roleAtt == nullptr) {
+				printf("Role attribute is nullptr, skipping entry in relation\n");
+				continue;
+			}
+
+			int64_t ref;
+			try {
+				ref = parse<int64_t>(indexAtt->value());
+			}
+			catch (runtime_error&) {
+				printf("Could not parse ref attribute to integer argument\n");
+				continue;
+			}
+
+
+			string typeAttName = typeAtt->value();
+			// Checks the type of the entry
+			if (typeAttName == "node") {
+				nodeRel->push_back(RelationMember(ref, roleAtt->value()));
+			}
+			else if (typeAttName == "way") {
+				wayRel->push_back(RelationMember(ref, roleAtt->value()));
+			}
+			else if (typeAttName == "relation") {
+				relationRel->push_back(RelationMember(ref, roleAtt->value()));
+			}
+			else {
+				printf("Unknown type attribute in relation member '%s'\n", typeAttName.c_str());
+			}
+		}
+		else if (childNodeName == "tag") {
+			parseTag(childNode, *tags);
+		}
+		else {
+			printf("Unknown relation tag %s\n", childNodeName.c_str());
+		}
+	}
+
+	vector<RelationMember>(*nodeRel).swap(*nodeRel);
+	vector<RelationMember>(*wayRel).swap(*wayRel);
+	vector<RelationMember>(*relationRel).swap(*relationRel);
+	vector<pair<string, string>>(*tags).swap(*tags);
+
+	localRelationList.push_back(OSMRelation(id, ver,
+		tags, nodeRel, wayRel, relationRel));
+	return true;
+}
+
+bool ParseTask::parseTag(xml_node<char>* node, vector<pair<string, string>>& tagList)
+{
+	xml_attribute<char>* kAtt = node->first_attribute("k");
+	xml_attribute<char>* vAtt = node->first_attribute("v");
+
+	if (kAtt->value() == nullptr) {
+		printf("Tag key attribute is nullptr, skipping node entry\n");
+		return false;
+	}
+	if (vAtt->value() == nullptr) {
+		printf("Tag value attribute is nullptr, skipping node entry\n");
+		return false;
+	}
+
+	tagList.push_back(pair<string, string>(
+		kAtt->value(), vAtt->value()));
+	return true;
+}
+
+XMLMap traffic::parseXMLMap(const std::string& file)
+{
+	ctpl::thread_pool pool(1);
+	return parseXMLMap(file, pool);
+}
+
+XMLMap traffic::parseXMLMap(const string& file, ctpl::thread_pool &pool)
 {
 	printf("Parsing XML file %s\n", file.c_str());
+	int threads = 8;
 	auto begin = high_resolution_clock::now();
 
-	xml_document<char> doc;
-	xml_node<char>* osm_node;
-	xml_node<char>* meta_node;
-
+	ParseInfo info;
 	// Read the xml file into a vector of chars.
 	// Adds a 0 byte to the vector to mark the end.
 	vector<char> buffer;
@@ -117,7 +574,7 @@ XMLMap traffic::parseXMLMap(const string& file)
 		duration_cast<milliseconds>(endSystemRead - begin).count());
 
 	try {
-		doc.parse<0>(&buffer[0]);
+		info.doc.parse<0>(&buffer[0]);
 	} catch (const parse_error&) {
 		printf("Could not parse xml file '%s'\n", file.c_str());
 		throw runtime_error("Could not parse xml file");
@@ -129,366 +586,62 @@ XMLMap traffic::parseXMLMap(const string& file)
 		duration_cast<milliseconds>(endParse - begin).count());
 
 	/// The OSM node is the root of the document.
-	osm_node = doc.first_node("osm");
-	if (osm_node == nullptr) {
+	info.osm_node = info.doc.first_node("osm");
+	if (info.osm_node == nullptr) {
 		printf("Could not find root node 'osm'\n");
 		throw runtime_error("Could not find root node 'osm'\n");
 	}
 
 	/// The meta data node describes some meta data.
-	meta_node = osm_node->first_node("meta");
-	if (meta_node == nullptr) {
+	info.meta_node = info.osm_node->first_node("meta");
+	if (info.meta_node == nullptr) {
 		printf("Could not find root node 'meta'\n");
 		throw runtime_error("Could not find root node 'meta'\n");
 	}
 
-	// The variables that will be filled during parsing
-	vector<OSMNode> nodeList;
-	vector<OSMWay> wayList;
-	vector<OSMRelation> relationList;
-
-	using map_t = robin_hood::unordered_node_map<int64_t, size_t>;
-	map_t nodeMap;
-	map_t wayMap;
-	map_t relationMap; 
-
-	/// Iterates over every node in this document
-	for (xml_node<char>* singleNode = osm_node->first_node();
-		singleNode; singleNode = singleNode->next_sibling())
-	{
-		string nodeString = singleNode->name();
-
-		/// Tries parsing a node. Every node must have the
-		/// following attributes. The parser will skip this node
-		/// if any of these items are missing.
-		/// <int64> id, <int32> version, float> lat, lon
-		///
-		/// The items will be casted from strings. The parser will
-		/// skip this node if any casting error happens. Casting errors
-		/// include out_of_range and invalid_number exceptions.
-		/// Every node has a set of attributes that are parsed.
-		if (nodeString == "node") {
-			// Tries parsing the basic node attributes.
-			// The parser must find all attributes to continue.
-			xml_attribute<char>* idAtt = singleNode->first_attribute("id");
-			xml_attribute<char>* latAtt = singleNode->first_attribute("lat");
-			xml_attribute<char>* lonAtt = singleNode->first_attribute("lon");
-			xml_attribute<char>* verAtt = singleNode->first_attribute("version");
-			
-			if (idAtt == nullptr) {
-				printf("ID attribute is nullptr (skipping node)\n");
-				continue;
-			}
-			if (verAtt == nullptr) {
-				printf("VERSION attribute is nullptr (skipping node)\n");
-				continue;
-			}
-			if (latAtt == nullptr) {
-				printf("LAT attribute is nullptr (skipping node)\n");
-				continue;
-			}
-			if (lonAtt == nullptr) {
-				printf("LON attribute is nullptr (skipping node)\n");
-				continue;
-			}
-
-			// Tries casting the arguments. The node is skipped
-			// if any errors occur during casting.
-			int64_t id;
-			int32_t ver;
-			prec_t lat, lon;
-			try {
-				id = parse<int64_t>(idAtt->value());
-				ver = parse<int32_t>(verAtt->value());
-				lat = parseDouble(latAtt->value());
-				lon = parseDouble(lonAtt->value());
-			}
-			catch (runtime_error &) {
-				printf("Could not convert node parameter to integer argument\n");
-				continue;
-			}
-
-			// Tries parsing the tag arguments of this node.
-			// Every tag consists of the format <tag k="" v="">.
-			// The attribute is skipped if the parser cannot find both
-			// attributes (k, v).
-			shared_ptr<vector<pair<string, string>>> tags = make_shared<vector<pair<string, string>>>();
-			for (xml_node<char>* tagNode = singleNode->first_node();
-				tagNode; tagNode = tagNode->next_sibling()) {
-			
-				string tagNodeName = tagNode->name();
-				
-				if (tagNodeName == "tag") {
-					xml_attribute<char>* kAtt = tagNode->first_attribute("k");
-					xml_attribute<char>* vAtt = tagNode->first_attribute("v");
-
-					if (kAtt->value() == nullptr) {
-						printf("Tag key attribute is nullptr, skipping node entry\n");
-						continue;
-					}
-					if (vAtt->value() == nullptr) {
-						printf("Tag value attribute is nullptr, skipping node entry\n");
-						continue;
-					}
-
-					tags->push_back(pair<string, string>(kAtt->value(), vAtt->value()));
-				}
-				else {
-					printf("Unknown tag in node %s, skipping tag entry\n", tagNodeName.c_str());
-				}
-			}
-			// shrinks the vector to save memory.
-			vector<pair<string, string>>(*tags).swap(*tags);
-
-			// Successfully parsed the whole node. The node
-			// will be added to the node list. A reference to
-			// the index will be saved inside the dictionary.
-			OSMNode nd(id, ver, tags, lat, lon);
-			nodeList.push_back(nd);
-			nodeMap[id] = nodeList.size() - 1;
-		}
-
-		/// Tries parsing a way using the current node.
-		/// Every way must include the following attributes.
-		/// <int64> id, <int32> version
-		else if (nodeString == "way") {
-			// Tries parsing the basic node attributes.
-			// The parser must find all attributes to continue.
-			xml_attribute<char>* idAtt = singleNode->first_attribute("id");
-			xml_attribute<char>* verAtt = singleNode->first_attribute("version");
-
-			if (idAtt == nullptr) {
-				printf("ID attribute is nullptr (skipping node)\n");
-				continue;
-			}
-			if (verAtt == nullptr) {
-				printf("VERSION attribute is nullptr (skipping node)\n");
-				continue;
-			}
-
-
-			// Tries casting the way attributes to numeric values.
-			// The parser must be able to convert all values to continue.
-			int64_t id;
-			int32_t ver;
-			try {
-				id = parse<int64_t>(idAtt->value());
-				ver = parse<int32_t>(verAtt->value());
-			}
-			catch (runtime_error &) {
-				printf("Could not convert way parameter to integer argument\n");
-				continue;
-			}
-
-			// Parses all child nodes in the tag. There are
-			// two possible tags in a way.
-			shared_ptr<vector<int64_t>> wayInfo =
-				make_shared<vector<int64_t>>();
-			shared_ptr<vector<pair<string, string>>> tags =
-				make_shared<vector<pair<string, string>>>();
-			for (xml_node<char>* wayNode = singleNode->first_node();
-				wayNode; wayNode = wayNode->next_sibling())
-			{	
-				string wayNodeName = wayNode->name();
-
-				// Tries parsing a node. Nodes are defined by the tag 'nd'.
-				// Every node tag has a reference node pointing to a node.
-				if (wayNodeName == "nd") {
-					xml_attribute<char>* refAtt = wayNode->first_attribute("ref");
-
-					if (refAtt == nullptr) {
-						printf("Ref attribute of way is not defined, skipping tag\n");
-						continue;
-					}
-
-					int64_t ref;
-					try {
-						ref = parse<int64_t>(refAtt->value());
-					} catch (runtime_error &) {
-						printf("Could not cast ref attribute, skipping tag\n");
-						continue;
-					}
-
-					auto it = nodeMap.find(ref);
-					if (it == nodeMap.end()) {
-						printf("Could not find node: %d\n", ref);
-						continue;
-					}
-					wayInfo->push_back(ref);
-				}
-
-				// Tries parsing a tag. A tag needs to have a key and
-				// value defined by 'k' and 'v'.
-				else if (wayNodeName == "tag") {
-					xml_attribute<char>* kAtt = wayNode->first_attribute("k");
-					xml_attribute<char>* vAtt = wayNode->first_attribute("v");
-
-					if (kAtt->value() == nullptr) {
-						printf("Tag key attribute is nullptr, skipping way entry\n");
-						continue;
-					}
-					if (vAtt->value() == nullptr) {
-						printf("Tag value attribute is nullptr, skipping way entry\n");
-						continue;
-					}
-
-					tags->push_back(pair<string, string>(
-						kAtt->value(), vAtt->value()));
-				}
-				// Could not parse the way child node.
-				else {
-					printf("Unknown way child node: %s\n", wayNodeName.c_str());
-				}
-			}
-			// shrinks the tags to save memory
-			vector<pair<string, string>>(*tags).swap(*tags);
-			vector<int64_t>(*wayInfo).swap(*wayInfo);
-			
-			wayList.push_back(OSMWay(id, ver, move(wayInfo), tags));
-			wayMap[id] = wayList.size() - 1;
-		}
-
-		/// Tries parsing a relation using the current node.
-		/// Every way must include the following attributes.
-		/// <int64> id, <int32> version
-		else if (nodeString == "relation") {
-			// Tries parsing the basic attributes.
-			// The parser must find all attributes to continue.
-			xml_attribute<char>* idAtt = singleNode->first_attribute("id");
-			xml_attribute<char>* verAtt = singleNode->first_attribute("version");
-
-			if (idAtt == nullptr) {
-				printf("ID attribute is nullptr (skipping relation)\n");
-				continue;
-			}
-			if (verAtt == nullptr) {
-				printf("VERSION attribute is nullptr (skipping relation)\n");
-				continue;
-			}
-
-			// Tries casting the way attributes to numeric values.
-			// The parser must be able to convert all values to continue.
-			int64_t id;
-			int32_t ver;
-			try {
-				id = parse<int64_t>(idAtt->value());
-				ver = parse<int32_t>(verAtt->value());
-			}
-			catch (runtime_error &) {
-				printf("Could not convert relation parameter to integer argument\n");
-				continue;
-			}
-
-
-			shared_ptr<vector<RelationMember>> nodeRel = make_shared<vector<RelationMember>>();
-			shared_ptr<vector<RelationMember>> wayRel = make_shared<vector<RelationMember>>();
-			shared_ptr<vector<RelationMember>> relationRel = make_shared<vector<RelationMember>>();
-			shared_ptr<vector<pair<string, string>>> tags = make_shared<vector<pair<string, string>>>();
-
-			for (xml_node<char>* childNode = singleNode->first_node();
-				childNode; childNode = childNode->next_sibling())
-			{
-				string childNodeName = childNode->name();
-				/// Tries parsing a member node. Every member node is
-				/// either a reference to a way or to a node. They are
-				/// required to have a 'type', 'ref' and 'role' tag.
-				/// The parser must find all these tags to continue.
-				if (childNodeName == "member") {
-					xml_attribute<char>* typeAtt = childNode->first_attribute("type");
-					xml_attribute<char>* indexAtt = childNode->first_attribute("ref");
-					xml_attribute<char>* roleAtt = childNode->first_attribute("role");
-
-					if (typeAtt == nullptr) {
-						printf("Member type is nullptr, skipping entry in relation\n");
-						continue;
-					}
-					if (indexAtt == nullptr) {
-						printf("Index attribute is nullptr, skipping entry in relation\n");
-						continue;
-					}
-					if (roleAtt == nullptr) {
-						printf("Role attribute is nullptr, skipping entry in relation\n");
-						continue;
-					}
-
-					int64_t ref;
-					try {
-						ref = parse<int64_t>(indexAtt->value());
-					}
-					catch (runtime_error &) {
-						printf("Could not parse ref attribute to integer argument\n");
-						continue;
-					}
-
-
-					string typeAttName = typeAtt->value();
-					// Checks the type of the entry
-					if (typeAttName == "node") {
-						nodeRel->push_back(RelationMember(ref, roleAtt->value()));
-					}
-					else if (typeAttName == "way") {
-						wayRel->push_back(RelationMember(ref, roleAtt->value()));
-					}
-					else if (typeAttName == "relation") {
-						relationRel->push_back(RelationMember(ref, roleAtt->value()));
-					}
-					else {
-						printf("Unknown type attribute in relation member '%s'\n", typeAttName.c_str());
-					}
-				}
-				else if (childNodeName == "tag") {
-					xml_attribute<char>* kAtt = childNode->first_attribute("k");
-					xml_attribute<char>* vAtt = childNode->first_attribute("v");
-
-					if (kAtt->value() == nullptr) {
-						printf("Tag key attribute is nullptr, skipping way entry\n");
-						continue;
-					}
-					if (vAtt->value() == nullptr) {
-						printf("Tag value attribute is nullptr, skipping way entry\n");
-						continue;
-					}
-
-					tags->push_back(pair<string, string>(kAtt->value(), vAtt->value()));
-				}
-				else {
-					printf("Unknown relation tag %s\n", childNodeName.c_str());
-				}
-			}
-
-			vector<RelationMember>(*nodeRel).swap(*nodeRel);
-			vector<RelationMember>(*wayRel).swap(*wayRel);
-			vector<RelationMember>(*relationRel).swap(*relationRel);
-			vector<pair<string, string>>(*tags).swap(*tags);
-
-			relationList.push_back(OSMRelation(id, ver,
-				tags, nodeRel, wayRel, relationRel));
-			relationMap[id] = relationList.size() - 1;
-		}
-		/// Could not identify the node.
-		else {
-			printf("Unknown XML node: %s\n", nodeString.c_str());
-		}
+	ParseInfo *infoPtr = &info;
+	vector<std::future<bool>> futures(threads);
+	for (int i = 0; i < threads; i++) {
+		LocalParseInfo local;
+		local.bufferSize = 1024 * 16;
+		local.mergeSize = 1024 * 8;
+		local.merge = false;
+		local.start = i;
+		local.stride = threads;
+		futures[i] = pool.push(ParseTask(infoPtr, local));
 	}
 
+	for (int i = 0; i < threads; i++) {
+		try {
+			futures[i].get();
+		}
+		catch (const std::exception &e) {
+			printf("Got exception from thread %d\n", i);
+		}
+	}
+	//threaded_parse(info, 0, 1);
+	
 
-	vector<OSMNode>(nodeList).swap(nodeList);
-	vector<OSMWay>(wayList).swap(wayList);
-	vector<OSMRelation>(relationList).swap(relationList);
+	if (info.nodeList.capacity() > info.nodeList.size())
+		vector<OSMNode>(info.nodeList).swap(info.nodeList);
+	if (info.wayList.capacity() > info.wayList.size())
+		vector<OSMWay>(info.wayList).swap(info.wayList);
+	if (info.relationList.capacity() > info.relationList.size())
+		vector<OSMRelation>(info.relationList).swap(info.relationList);
 
 	// Prints some diagnostics about the program
 	auto endRead = chrono::high_resolution_clock::now();
 	printf("Parsed %d ways and %d nodes. Took %dms, Total %dms\n",
-		wayList.size(), nodeList.size(),
+		info.wayList.size(), info.nodeList.size(),
 		duration_cast<milliseconds>(endRead - endParse).count(),
 		duration_cast<milliseconds>(endRead - begin).count());
 
 	return XMLMap(
-		make_shared<vector<OSMNode>>(move(nodeList)),
-		make_shared<vector<OSMWay>>(move(wayList)),
-		make_shared<vector<OSMRelation>>(move(relationList)),
-		make_shared<map_t>(move(nodeMap)),
-		make_shared<map_t>(move(wayMap)),
-		make_shared<map_t>(move(relationMap))
+		make_shared<vector<OSMNode>>(move(info.nodeList)),
+		make_shared<vector<OSMWay>>(move(info.wayList)),
+		make_shared<vector<OSMRelation>>(move(info.relationList)),
+		make_shared<map_t>(move(info.nodeMap)),
+		make_shared<map_t>(move(info.wayMap)),
+		make_shared<map_t>(move(info.relationMap))
 	);
 }

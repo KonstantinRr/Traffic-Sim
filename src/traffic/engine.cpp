@@ -23,32 +23,44 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
-#pragma once
-
-#ifndef OSM_MESH_H
-#define OSM_MESH_H
-
 #include "engine.h"
 
-#include <glm/glm.hpp>
-
-#include "osm.h"
-#include "agent.h"
-
-namespace traffic
-{
-    glm::vec2 sphereToPlane(glm::vec2 latLon, glm::vec2 center);
-    glm::vec2 sphereToPlane(glm::vec2 latLon);
-
-    std::vector<glm::vec2> generateMesh(const XMLMap& map);
-    std::vector<glm::vec2> generateChunkMesh(const World& world);
-    void unify(std::vector<glm::vec2> &points);
-
-    const char * getLineVertex();
-    const char * getLineFragment();
-
-    const char * getChunkVertex();
-    const char * getChunkFragment();
+AtomicLock::AtomicLock(bool doLock) {
+	this->doLock = doLock;
 }
 
+void AtomicLock::lock() noexcept {
+	this->doLock = doLock;
+	if (doLock) {
+		for (;;) {
+			// Optimistically assume the lock is free on first the try
+			if (!plock.exchange(true, std::memory_order_acquire)) {
+				return;
+			}
+			// Wait for lock to be released without generating cache misses
+			while (plock.load(std::memory_order_relaxed)) {
+				// Issue X86 PAUSE or ARM YIELD instruction to reduce contention between
+				// hyper-threads
+#if defined(__GNUC__)
+				__builtin_ia32_pause();
+#elif defined(_MSC_VER )
+				_mm_pause();
 #endif
+			}
+		}
+	}
+}
+
+bool AtomicLock::try_lock() noexcept {
+	// First do a relaxed load to check if lock is free in order to prevent
+	// unnecessary cache misses if someone does while(!try_lock())
+	return !plock.load(std::memory_order_relaxed) &&
+		!plock.exchange(true, std::memory_order_acquire);
+}
+
+
+void AtomicLock::unlock() noexcept {
+	if (doLock) {
+		plock.store(false, std::memory_order_release);
+	}
+}

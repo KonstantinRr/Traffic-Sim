@@ -32,9 +32,41 @@
 #define SPDLOG_FMT_EXTERNAL
 #define _CRT_SECURE_NO_WARNINGS 1
 
+#if defined(_WIN32)
+#  define NOMINMAX
+#  define WIN32_LEAN_AND_MEAN
+#  if defined(APIENTRY)
+#    undef APIENTRY
+#  endif
+#  include <windows.h>
+#endif
+
+
 using float32 = float;
 using float64 = double;
 
 using prec_t = double;
+
+#include <atomic>
+#include <iostream>
+
+class AtomicLock
+{
+protected:
+	std::atomic<bool> plock = { 0 };
+	bool doLock;
+
+public:
+	AtomicLock(bool doLock = true);
+	AtomicLock(const AtomicLock&) = delete;
+	AtomicLock(AtomicLock&&) = delete;
+
+	void lock() noexcept;
+	bool try_lock() noexcept;
+	void unlock() noexcept;
+
+	AtomicLock& operator=(const AtomicLock&) = delete;
+	AtomicLock& operator=(AtomicLock&&) = delete;
+};
 
 #endif

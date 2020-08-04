@@ -27,7 +27,7 @@
 
 #include <math.h>
 #include <algorithm>
-
+#include <fmt/core.h>
 #include "geom.h"
 
 using namespace std;
@@ -115,9 +115,11 @@ Point Rect::latHlonL() const { return center + Distance(latLength, -lonLength); 
 Point Rect::latLlonH() const { return center + Distance(-latLength, lonLength); }
 Point Rect::latLlonL() const { return center + Distance(-latLength, -lonLength); }
 
-void traffic::Rect::summary() const
+std::string traffic::Rect::summary() const
 {
-	
+	return fmt::format("Rect {} {} {} {}",
+		lowerLonBorder(), upperLonBorder(),
+		lowerLatBorder(), upperLatBorder());
 }
 
 Rect& Rect::performScaleLat(prec_t scale) {

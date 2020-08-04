@@ -125,8 +125,7 @@ namespace traffic
         World(const std::shared_ptr<XMLMap> &map, prec_t chunkSize);
 
         // ---- Functions ---- //
-
-
+        const std::shared_ptr<XMLMap>& getMap() const;
         const std::shared_ptr<Graph>& getGraph() const;
         const std::vector<Agent>& getAgents() const;
         const std::vector<WorldChunk>& getChunks() const;
