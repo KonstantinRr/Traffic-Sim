@@ -139,7 +139,7 @@ World::World(const std::shared_ptr<XMLMap>& map, prec_t chunkSize)
 {
     this->m_chunkSize = chunkSize;
     this->m_map = map;
-    this->m_graph = std::make_shared<Graph>(map);
+    //this->m_graph = std::make_shared<Graph>(map);
     recalculateChunks();
 }
 

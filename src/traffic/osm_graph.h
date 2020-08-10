@@ -37,6 +37,8 @@
 
 #include "osm.h"
 
+using graphmap_t = robin_hood::unordered_node_map<int64_t, size_t>;
+
 namespace traffic
 {
     /* Graph Representation */
@@ -53,14 +55,18 @@ namespace traffic
 	/// cost may be calculated by different method but may never be negative. This
 	/// may lead to unexpected consequences.
 	/// </summary>
-	struct GraphEdge
+	class GraphEdge : public SizeObject
 	{ 
+	public:
 		/// <summary>Creates an edge of a graph</summary>
 		/// <param name="goalID">The destination where this edge leads</param>
 		/// <param name="weight">The weight that is associated with this edge</param>
 		/// <returns></returns>
 		GraphEdge(int64_t goalID, prec_t weight);
 
+		virtual size_t getSize() const;
+
+	public:
 		// ---- Member definitions ---- //
 		int64_t goal;
 		prec_t weight;
@@ -78,6 +84,10 @@ namespace traffic
 		/// <param name="node">A regular OSM node</param>
 		/// <returns></returns>
 		GraphNode(const OSMNode &node);
+
+		virtual bool hasManagedSize() const;
+		virtual size_t getManagedSize() const;
+		virtual size_t getSize() const;
 
 		glm::vec2 getPosition() const;
 		prec_t getLatitude() const;
@@ -121,6 +131,8 @@ namespace traffic
 		/// <returns></returns>
 		Graph(const std::shared_ptr<XMLMap> &xmlmap);
 
+		virtual ~Graph() = default;
+
 		/// <summary>Applies the AStar (A*) path finding algorithm on the graph</summary>
 		/// <param name="start">The starting node ID</param>
 		/// <param name="goal">The destination node ID</param>
@@ -147,11 +159,11 @@ namespace traffic
 
 		// ---- Getter functions ---- //
 
-		std::map<int64_t, size_t>& getMap();
+		graphmap_t& getMap();
 		std::vector<GraphNode>& getBuffer();
 		std::shared_ptr<XMLMap> getXMLMap();
 
-		const std::map<int64_t, size_t>& getMap() const;
+		const graphmap_t& getMap() const;
 		const std::vector<GraphNode>& getBuffer() const;
 		std::shared_ptr<const XMLMap> getXMLMap() const;
 
@@ -161,9 +173,13 @@ namespace traffic
 
 		bool checkConsistency() const;
 
+		virtual bool hasManagedSize() const;
+		virtual size_t getManagedSize() const;
+		virtual size_t getSize() const;
+
 	protected:
 		std::vector<GraphNode> graphBuffer;
-		std::map<int64_t, size_t> graphMap;
+		graphmap_t graphMap;
 		std::shared_ptr<XMLMap> xmlmap;
 	};
 }

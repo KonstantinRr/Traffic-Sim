@@ -31,15 +31,74 @@
 #include "engine.h"
 
 #include <string>
+#include <chrono>
 
 #include "osm.h"
 
 class thread_pool;
+using taglist_t = std::vector<std::pair<std::string, std::string>>;
+namespace traffic
+{
+	struct ParseTimings
+	{
+		std::chrono::steady_clock::time_point
+			begin, endRead, endXMLParse, endDataParse, end;
 
-namespace traffic {
+		void summary();
+	};
+
+	struct ParseArguments
+	{
+		int threads = 8;
+		std::string file = "map.xmlmap";
+		ctpl::thread_pool *pool = nullptr;
+		ParseTimings *timings = nullptr;
+	};
+
+	struct OSMNodeTemp
+	{
+		int64_t id; int32_t ver;
+		std::shared_ptr<taglist_t> tags;
+		prec_t lat, lon;
+		
+		OSMNodeTemp(int64_t id, int32_t ver,
+			const std::shared_ptr<taglist_t> &tags,
+			prec_t lat, prec_t lon) : id(id), ver(ver),
+			tags(tags), lat(lat), lon(lon) { }
+	};
+
+	struct OSMWayTemp
+	{
+		int64_t id; int32_t ver;
+		std::shared_ptr<taglist_t> tags;
+		std::shared_ptr<std::vector<int64_t>> nodes;
+
+		OSMWayTemp(int64_t id, int32_t ver,
+			const std::shared_ptr<taglist_t>& tags,
+			const std::shared_ptr<std::vector<int64_t>>& nodes) :
+			id(id), ver(ver), tags(tags), nodes(nodes) { }
+	};
+
+	struct OSMRelationTemp
+	{
+		int64_t id; int32_t ver;
+		std::shared_ptr<taglist_t> tags;
+		std::shared_ptr<std::vector<RelationMember>> nodes;
+		std::shared_ptr<std::vector<RelationMember>> ways;
+		std::shared_ptr<std::vector<RelationMember>> relations;
+
+		OSMRelationTemp(
+			int64_t id, int32_t ver,
+			const std::shared_ptr<taglist_t> &tags,
+			const std::shared_ptr<std::vector<RelationMember>> &nodes,
+			const std::shared_ptr<std::vector<RelationMember>> &ways,
+			const std::shared_ptr<std::vector<RelationMember>> &relations) :
+			id(id), ver(ver), tags(tags), nodes(nodes),
+			ways(ways), relations(relations) { }
+	};
+
 	std::vector<unsigned char> writeXOSMMap(const XMLMap &map, const std::string &file);
-	XMLMap parseXMLMap(const std::string& file);
-	XMLMap parseXMLMap(const std::string &file, ctpl::thread_pool& pool);
+	XMLMap parseXMLMap(const ParseArguments &args);
 } // namespace traffic
 
 #endif

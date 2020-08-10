@@ -75,6 +75,7 @@ namespace traffic
 		/// by an identifier (ID) and version tag. </summary>
 		int32_t version;
 
+	private:
 		/// <summary> List of tags that every entity own. These attributes do not need
 		/// to follow certain criteria and can store basically every std::string value.
 		/// </summary>
@@ -412,7 +413,8 @@ namespace traffic
 	/// float upperLat	Max latitude value that is stored in this map
 	/// float lowerLon	Min longitude vlaue that is stored in this map
 	/// float upperLon	Max longitude value that is stored in this map
-	class XMLMap {
+	class XMLMap
+	{
 	protected:
 		float lowerLat, upperLat, lowerLon, upperLon;
 
@@ -424,7 +426,7 @@ namespace traffic
 		// (2) maps the way ids to indices in the way list
 		// (3) maps the relation ids to indices in the relation list
 		//using map_t = std::unordered_map<int64_t, size_t>;
-		using map_t = robin_hood::unordered_node_map<int64_t, size_t>;
+		//using map_t = robin_hood::unordered_node_map<int64_t, size_t>;
 		std::shared_ptr<map_t> nodeMap;
 		std::shared_ptr<map_t> wayMap;
 		std::shared_ptr<map_t> relationMap;
@@ -441,6 +443,8 @@ namespace traffic
 			const std::shared_ptr<map_t>& wayMap,
 			const std::shared_ptr<map_t>& relationMap);
 		explicit XMLMap(const json& json);
+
+		~XMLMap();
 
 		size_t getManagedSize() const;
 		size_t getSize() const;

@@ -150,6 +150,7 @@ namespace traffic
         size_t toStore(prec_t lat, prec_t lon) const;
         size_t toStore(size_t localLat, size_t localLon) const;
 
+
     protected:
         // ---- Member definitions ---- //
         prec_t m_chunkSize;

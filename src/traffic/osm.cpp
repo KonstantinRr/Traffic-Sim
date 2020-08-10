@@ -36,21 +36,6 @@
 using namespace std;
 using namespace traffic;
 
-template<typename key_t, typename val_t>
-size_t getMapCapacitySize(const unordered_map<key_t, val_t>& map) {
-	size_t count = 0;
-	for (size_t i = 0; i < map.bucket_count(); ++i) {
-		size_t bucket_size = map.bucket_size(i);
-		if (bucket_size == 0) {
-			count++;
-		}
-		else {
-			count += bucket_size;
-		}
-	}
-	return count;
-}
-
 // ---- OSM object ---- //
 
 OSMMapObject::OSMMapObject() { }
@@ -83,13 +68,16 @@ size_t OSMMapObject::getSize() const {
 
 size_t OSMMapObject::getManagedSize() const
 {
-	size_t totalSize = sizeof(*tags);
-	totalSize += tags->capacity() * sizeof(pair<string, string>);
-	std::for_each(tags->begin(), tags->end(),
-		[&](const auto& pair) {
-			totalSize += pair.first.size() + pair.second.size();
-		}
-	);
+	size_t totalSize = 0;
+	if (tags) {
+		totalSize += sizeof(*tags);
+		totalSize += tags->capacity() * sizeof(pair<string, string>);
+		std::for_each(tags->begin(), tags->end(),
+			[&](const auto& pair) {
+				totalSize += pair.first.size() + pair.second.size();
+			}
+		);
+	}
 	return totalSize;
 }
 
@@ -103,8 +91,10 @@ shared_ptr<vector<pair<string, string>>>
 OSMMapObject::getData() const { return tags; }
 
 bool OSMMapObject::hasTag(const string& key) const {
-	for (const pair<string, string>& vecKey : (*tags)) {
-		if (vecKey.first == key) return true;
+	if (tags) {
+		for (const pair<string, string>& vecKey : (*tags)) {
+			if (vecKey.first == key) return true;
+		}
 	}
 	return false;
 }
@@ -112,15 +102,20 @@ bool OSMMapObject::hasTag(const string& key) const {
 bool OSMMapObject::hasTagValue(
 	const string& key, const string& value
 ) const {
-	for (const pair<string, string>& vecKey : (*tags)) {
-		if (vecKey.first == key && vecKey.second == value) return true;
+	if (tags) {
+		for (const pair<string, string>& vecKey : (*tags)) {
+			if (vecKey.first == key && vecKey.second == value) return true;
+		}
 	}
 	return false;
 }
 
-string OSMMapObject::getValue(const string& key) const {
-	for (const pair<string, string>& vecKey : (*tags)) {
-		if (vecKey.first == key) return vecKey.second;
+string OSMMapObject::getValue(const string& key) const
+{
+	if (tags) {
+		for (const pair<string, string>& vecKey : (*tags)) {
+			if (vecKey.first == key) return vecKey.second;
+		}
 	}
 	// TODO change output
 	return "";
@@ -355,6 +350,11 @@ XMLMap::XMLMap(const json& json)
 	//relationMap = make_shared<map_t>(json.at("relation_map").get<map_t>());
 }
 
+traffic::XMLMap::~XMLMap()
+{
+	printf("Deallocating map\n");
+}
+
 void XMLMap::toJson(json& json) const {
 	json["nodes"] = *nodeList;
 	json["ways"] = *wayList;
@@ -524,7 +524,7 @@ size_t XMLMap::getManagedSize() const {
 		[&](const OSMRelation& rl) { size += rl.getManagedSize(); });
 	// TODO
 	size += nodeMap->calcNumBytesTotal(nodeMap->mask() + 1);
-	size += wayMap->calcNumBytesInfo(wayMap->mask() + 1);
+	size += wayMap->calcNumBytesTotal(wayMap->mask() + 1);
 	size += relationMap->calcNumBytesTotal(relationMap->mask() + 1);
 	return size;
 }

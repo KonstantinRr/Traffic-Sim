@@ -66,12 +66,18 @@ std::shared_ptr<XMLMap> initMap(ctpl::thread_pool &pool)
 	Rect initRect = Rect::fromBorders(
 		51.9362, 51.9782, 7.9553, 8.0259);
 
+	ParseTimings timings;
+	ParseArguments args;
+	args.file = "warendorf.xmlmap";
+	args.threads = 8;
+	args.pool = &pool;
+	args.timings = &timings;
 	auto map = std::make_shared<XMLMap>(
-		parseXMLMap("warendorf.xmlmap", pool));
-
+		parseXMLMap(args));
+	timings.summary();
 	map->summary();
 	
-	*map = map->findSquareNodes(initRect);
+	//*map = map->findSquareNodes(initRect);
 	/*
 	*map = map->findNodes(
 		[](const OSMNode& nd) { return nd.hasTag("highway"); },
@@ -79,6 +85,7 @@ std::shared_ptr<XMLMap> initMap(ctpl::thread_pool &pool)
 		[](const OSMWay&, const OSMNode&) { return true; }
 	);
 	*/
+	
 	map->summary();
 	return map;
 
@@ -104,9 +111,7 @@ protected:
 	ref<Shader> m_chunk_shader;
 	
 	std::shared_ptr<XMLMap> map;
-	std::shared_ptr<std::vector<glm::vec3>> colors;
-	std::shared_ptr<std::vector<glm::vec2>> points;
-	std::shared_ptr<std::vector<glm::vec2>> chunks;
+	size_t pointsSize, chunksSize;
 	bool m_active;
 	bool m_render_chunk;
 
@@ -118,7 +123,7 @@ public:
 		using namespace nanogui;
 		this->map = map;
 		m_active = false;
-		m_render_chunk = true;
+		m_render_chunk = false;
 
 		auto centerPoint = sphereToPlane(map->getRect().getCenter().toVec());
 		position = {
@@ -168,8 +173,7 @@ public:
 		std::shared_ptr<std::vector<glm::vec3>> colors,
 		std::shared_ptr<std::vector<glm::vec2>> points) {
 		using namespace nanogui;
-		this->colors = colors;
-		this->points = points;
+		pointsSize = points->size();
 		m_shader->set_buffer("vVertex", VariableType::Float32,
 			{ points->size(), 2 }, points->data());
 		m_shader->set_buffer("color", VariableType::Float32,
@@ -179,9 +183,9 @@ public:
 	void setChunkData(
 		std::shared_ptr<std::vector<glm::vec2>> points) {
 		using namespace nanogui;
-		this->chunks = points;
+		chunksSize = points->size();
 		m_chunk_shader->set_buffer("vVertex", VariableType::Float32,
-			{ chunks->size(), 2 }, chunks->data());
+			{ points->size(), 2 }, points->data());
 	}
 
 	void setActive(bool active) {
@@ -222,13 +226,13 @@ public:
 				m_chunk_shader->set_uniform("mvp", scale * matrix);
 				m_chunk_shader->set_uniform("color", Vector4f(1.0f, 0.0f, 0.0f, 1.0f));
 				m_chunk_shader->begin();
-				m_shader->draw_array(Shader::PrimitiveType::Line, 0, chunks->size(), false);
+				m_shader->draw_array(Shader::PrimitiveType::Line, 0, chunksSize, false);
 				m_chunk_shader->end();
 			}
 
 			m_shader->set_uniform("mvp", scale * matrix);
 			m_shader->begin();
-			m_shader->draw_array(Shader::PrimitiveType::Line, 0, points->size(), false);
+			m_shader->draw_array(Shader::PrimitiveType::Line, 0, pointsSize, false);
 			m_shader->end();
 		}
 	}
@@ -254,13 +258,15 @@ class TrafficApplication : public nanogui::Screen
 public:
 	TrafficApplication() : nanogui::Screen(
 		Vector2i(800, 600), "TrafficSim", true),
-		pool(8)
+		pool(12)
 	{
 		using namespace nanogui;
 		auto map = initMap(pool);
 		world = std::make_shared<World>(map, 0.005);
 		auto points = std::make_shared<std::vector<glm::vec2>>(generateMesh(*map));
-		auto colors = std::make_shared<std::vector<glm::vec3>>(points->size(), glm::vec3(1.0f, 1.0f, 1.0f));
+		auto colors = std::make_shared<std::vector<glm::vec3>>(points->size(), glm::vec3( 1.0f, 1.0f, 1.0f));
+		//for (size_t i = 0; i < colors->size(); i++)
+		//	(*colors)[i] = glm::vec3(rand() % 256 / 255.0f, rand() % 256 / 255.0f, rand() % 256 / 255.0f);
 		auto chunks = std::make_shared<std::vector<glm::vec2>>(generateChunkMesh(*world));
 
 		m_canvas = new MapCanvas(this, map);

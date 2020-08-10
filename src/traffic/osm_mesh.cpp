@@ -95,7 +95,6 @@ std::vector<glm::vec2> traffic::generateChunkMesh(const World& world)
 	for (const WorldChunk& chunk : world.getChunks())
 	{
 		const Rect box = chunk.getBoundingBox();
-		cout << box.summary() << endl;
 
 		positions.push_back(sphereToPlane(box.latLlonL().toVec(), center));
 		positions.push_back(sphereToPlane(box.latLlonH().toVec(), center));

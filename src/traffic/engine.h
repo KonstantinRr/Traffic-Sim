@@ -42,13 +42,57 @@
 #endif
 
 
+#include <vector>
+#include <unordered_map>
+#include <atomic>
+#include <iostream>
+
+#include "robin_hood.h"
+
 using float32 = float;
 using float64 = double;
 
-using prec_t = double;
+using prec_t = float;
+using map_index_t = uint32_t;
+using map_t = robin_hood::unordered_flat_map<int64_t, map_index_t>;
 
-#include <atomic>
-#include <iostream>
+
+class SizeObject
+{
+public:
+	virtual bool hasManagedSize() const;
+	virtual size_t getManagedSize() const;
+	virtual size_t getSize() const = 0;
+};
+
+template<typename T> size_t getSizeOfObjects(const std::vector<T>& vec)
+{
+	size_t size = sizeof(vec);
+	if (!vec.empty()) {
+		if (vec[0].hasManagedSize()) {
+			for (const T& instance : vec) {
+				size += instance.getManagedSize();
+			}
+		}
+		size += vec.capacity() * sizeof(T);
+	}
+	return size;
+}
+
+template<typename key_t, typename val_t>
+size_t getMapCapacitySize(const std::unordered_map<key_t, val_t>& map) {
+	size_t count = 0;
+	for (size_t i = 0; i < map.bucket_count(); ++i) {
+		size_t bucket_size = map.bucket_size(i);
+		if (bucket_size == 0) {
+			count++;
+		}
+		else {
+			count += bucket_size;
+		}
+	}
+	return count;
+}
 
 class AtomicLock
 {

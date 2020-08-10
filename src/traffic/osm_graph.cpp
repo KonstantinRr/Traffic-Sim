@@ -74,6 +74,17 @@ GraphNode::GraphNode(const OSMNode &node)
 	this->nodeID = node.getID();
 }
 
+bool traffic::GraphNode::hasManagedSize() const { return true; }
+size_t traffic::GraphNode::getManagedSize() const
+{
+	return getSizeOfObjects(connections);
+}
+
+size_t traffic::GraphNode::getSize() const
+{
+	return sizeof(*this) + getManagedSize();
+}
+
 vec2 GraphNode::getPosition() const { return vec2(lon, lat); }
 prec_t GraphNode::getLatitude() const { return lat; }
 prec_t GraphNode::getLongitude() const { return lon; }
@@ -84,6 +95,8 @@ GraphEdge::GraphEdge(int64_t pGoalID, prec_t pWeight) {
 	this->goal = pGoalID;
 	this->weight = pWeight;
 }
+
+size_t traffic::GraphEdge::getSize() const { return sizeof(*this); }
 
 // ---- Route ---- //
 
@@ -243,11 +256,11 @@ int64_t Graph::findNodeIndex(int64_t id) const {
 	return graphMap.end() == it ? -1 : it->second;
 }
 
-std::map<int64_t, size_t>& Graph::getMap() { return graphMap; }
+graphmap_t& Graph::getMap() { return graphMap; }
 std::vector<GraphNode>& Graph::getBuffer() { return graphBuffer; }
 std::shared_ptr<XMLMap> Graph::getXMLMap() { return xmlmap; }
 
-const std::map<int64_t, size_t>& Graph::getMap() const { return graphMap; }
+const graphmap_t& Graph::getMap() const { return graphMap; }
 const std::vector<GraphNode>& Graph::getBuffer() const { return graphBuffer; }
 std::shared_ptr<const XMLMap> Graph::getXMLMap() const { return xmlmap; }
 
@@ -324,4 +337,15 @@ bool Graph::checkConsistency() const {
 
 	printf("Graph consistency check computed %d\n", check);
 	return true;
+}
+
+bool traffic::Graph::hasManagedSize() const { return true; }
+size_t traffic::Graph::getManagedSize() const
+{
+	return getSizeOfObjects(graphBuffer);
+}
+
+size_t traffic::Graph::getSize() const
+{
+	return size_t();
 }

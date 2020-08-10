@@ -64,3 +64,13 @@ void AtomicLock::unlock() noexcept {
 		plock.store(false, std::memory_order_release);
 	}
 }
+
+bool SizeObject::hasManagedSize() const
+{
+	return false;
+}
+
+size_t SizeObject::getManagedSize() const
+{
+	return 0;
+}
