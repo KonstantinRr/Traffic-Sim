@@ -110,7 +110,7 @@ void Route::addNode(int64_t nodeID) {
 
 // ---- Graph ---- //
 
-Graph::Graph(const shared_ptr<XMLMap>& xmlmap)
+Graph::Graph(const shared_ptr<OSMSegment>& xmlmap)
 {
 	this->xmlmap = xmlmap;
 	// Iterates throught the whole list of ways, and nodes for each way. The algorithm checks
@@ -258,11 +258,11 @@ int64_t Graph::findNodeIndex(int64_t id) const {
 
 graphmap_t& Graph::getMap() { return graphMap; }
 std::vector<GraphNode>& Graph::getBuffer() { return graphBuffer; }
-std::shared_ptr<XMLMap> Graph::getXMLMap() { return xmlmap; }
+std::shared_ptr<OSMSegment> Graph::getXMLMap() { return xmlmap; }
 
 const graphmap_t& Graph::getMap() const { return graphMap; }
 const std::vector<GraphNode>& Graph::getBuffer() const { return graphBuffer; }
-std::shared_ptr<const XMLMap> Graph::getXMLMap() const { return xmlmap; }
+std::shared_ptr<const OSMSegment> Graph::getXMLMap() const { return xmlmap; }
 
 size_t Graph::countNodes() const {
 	return graphBuffer.size();
@@ -308,7 +308,7 @@ bool Graph::checkConsistency() const {
 			continue;
 		}
 		if (xmlmap->hasNodeIndex(checkIndex->second)) {
-			printf("OSMNode does not exist in XMLMap: %d\n", checkIndex->second);
+			printf("OSMNode does not exist in OSMSegment: %d\n", checkIndex->second);
 			check = false;
 			continue;
 		}

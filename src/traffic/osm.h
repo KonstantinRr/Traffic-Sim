@@ -120,11 +120,11 @@ namespace traffic
 
 		/// <summary> Returns the ID that is stored in this OSM object</summary>
 		/// <returns>The identifier of this object (ID)</returns>
-		int64_t getID() const;
+		int64_t getID() const noexcept;
 
 		/// <summary> Returns the version of this OSM object</summary>
 		/// <returns>The version of this object</returns>
-		int32_t getVer() const;
+		int32_t getVer() const noexcept;
 
 		// ---- Tag functions ---- //
 
@@ -132,14 +132,14 @@ namespace traffic
 		/// given name.</summary>
 		/// <param name="key">The key which is searched in the map</param>
 		/// <returns>True if the map contains a key with this tag, false otherwise</returns>
-		bool hasTag(const std::string& key) const;
+		bool hasTag(const std::string& key) const noexcept;
 
 		/// <summary>Returns whether the tag list contains the given key-value pair. 
 		/// </summary>
 		/// <param name="key">Key of the key-value pair</param>
 		/// <param name="value">Value of the key-value pair</param>
 		/// <returns>True if the map contains the key-value pair, false otherwise</returns>
-		bool hasTagValue(const std::string& key, const std::string& value) const;
+		bool hasTagValue(const std::string& key, const std::string& value) const noexcept;
 
 		/// <summary>Returns the value of index by the given key. Raises an exception
 		/// if the map does not contain the specific key</summary>
@@ -149,7 +149,7 @@ namespace traffic
 
 		/// <summary>Returns the key-value map in vector format</summary>
 		/// <returns>A vector map that contains all key-value pairs</returns>
-		std::shared_ptr<vector_map> getData() const;
+		std::shared_ptr<vector_map> getData() const noexcept;
 
 		// ---- Size operators ---- //
 
@@ -267,11 +267,12 @@ namespace traffic
 	{
 	protected:
 		std::shared_ptr<std::vector<int64_t>> nodes;
+		int32_t subIndex;
 
 	public:
 		/// <summary> Creates an empty way that does not contain any nodes</summary>
 		/// <returns></returns>
-		OSMWay() = default;
+		OSMWay();
 		
 		/// <summary>Creates a way using an id, version and nodes</summary>
 		/// <param name="id">The way's ID</param>
@@ -304,6 +305,12 @@ namespace traffic
 
 		virtual size_t getManagedSize() const;
 		virtual size_t getSize() const;
+
+		void clear() noexcept;
+		void addNode(int64_t node) noexcept;
+
+		int32_t getSubIndex() const;
+		void setSubIndex(int32_t subIndex);
 
 		/// <summary>Accesses the nodes that are stored in this way</summary>
 		/// <returns>A vector of nodes</returns>
@@ -359,6 +366,7 @@ namespace traffic
 		std::shared_ptr<std::vector<RelationMember>> nodes;
 		std::shared_ptr<std::vector<RelationMember>> ways;
 		std::shared_ptr<std::vector<RelationMember>> relations;
+		int32_t subIndex;
 
 	public:
 		explicit OSMRelation();
@@ -379,6 +387,9 @@ namespace traffic
 
 		virtual size_t getManagedSize() const;
 		virtual size_t getSize() const;
+
+		int32_t getSubIndex() const;
+		void setSubIndex(int32_t subIndex);
 
 		void toJson(json& json) const;
 
@@ -406,21 +417,26 @@ namespace traffic
 
 	/// This class represents a MapStructure. It combines all
 	/// values stored in the OpenStreetMap XML format.
-	/// nodeList		All nodes stored in the XMLMap section
-	/// wayList			All ways stored in the XMLMap section
-	/// relationList	All relations stored in the XMLMap section
+	/// nodeList		All nodes stored in the OSMSegment section
+	/// wayList			All ways stored in the OSMSegment section
+	/// relationList	All relations stored in the OSMSegment section
 	/// float lowerLat	Min latitude value that is stored in this map
 	/// float upperLat	Max latitude value that is stored in this map
 	/// float lowerLon	Min longitude vlaue that is stored in this map
 	/// float upperLon	Max longitude value that is stored in this map
-	class XMLMap
+	class OSMSegment
 	{
 	protected:
+		/// <summary> Defines the bounding boxes of this map segment </summary>
 		float lowerLat, upperLat, lowerLon, upperLon;
 
-		std::shared_ptr<std::vector<OSMNode>> nodeList; // containts all nodes
-		std::shared_ptr<std::vector<OSMWay>> wayList; // contains all ways
-		std::shared_ptr<std::vector<OSMRelation>> relationList; // contains all relations
+		using listnode_ptr_t = std::shared_ptr<std::vector<OSMNode>>;
+		using listway_ptr_t = std::shared_ptr<std::vector<OSMWay>>;
+		using listrelation_ptr_t = std::shared_ptr<std::vector<OSMRelation>>;
+
+		listnode_ptr_t nodeList; // containts all nodes
+		listway_ptr_t wayList; // contains all ways
+		listrelation_ptr_t relationList; // contains all relations
 
 		// (1) maps the node ids to indices in the node list
 		// (2) maps the way ids to indices in the way list
@@ -428,53 +444,65 @@ namespace traffic
 		//using map_t = std::unordered_map<int64_t, size_t>;
 		//using map_t = robin_hood::unordered_node_map<int64_t, size_t>;
 		std::shared_ptr<map_t> nodeMap;
-		std::shared_ptr<map_t> wayMap;
-		std::shared_ptr<map_t> relationMap;
+		std::shared_ptr<mapid_t<std::vector<size_t>>> wayMap;
+		std::shared_ptr<mapid_t<std::vector<size_t>>> relationMap;
 
 	public:
+		//// ---- Constructors ---- ////
 		/// Creates a map that does not hold any data 
-		explicit XMLMap();
+		explicit OSMSegment();
+		explicit OSMSegment(const Rect &rect);
+		explicit OSMSegment(const listnode_ptr_t& nodes,
+			const listway_ptr_t& ways, const listrelation_ptr_t& relations);
 		/// Creates a map that holds the passed data
-		explicit XMLMap(
-			const std::shared_ptr<std::vector<OSMNode>>& nodes,
-			const std::shared_ptr<std::vector<OSMWay>>& ways,
-			const std::shared_ptr<std::vector<OSMRelation>>& relations,
+		explicit OSMSegment(
+			const listnode_ptr_t& nodes, const listway_ptr_t& ways,
+			const listrelation_ptr_t& relations,
 			const std::shared_ptr<map_t>& nodeMap,
-			const std::shared_ptr<map_t>& wayMap,
-			const std::shared_ptr<map_t>& relationMap);
-		explicit XMLMap(const json& json);
+			const std::shared_ptr<mapid_t<std::vector<size_t>>>& wayMap,
+			const std::shared_ptr<mapid_t<std::vector<size_t>>>& relationMap);
+		
+		// ---- JSON interface ---- //
+		explicit OSMSegment(const json& json);
+		void toJson(json& json) const;
 
-		~XMLMap();
+		OSMSegment(const OSMSegment&) = delete;
+		OSMSegment(OSMSegment&&) = default;
+
+		OSMSegment& operator=(const OSMSegment&) = delete;
+		OSMSegment& operator=(OSMSegment&&) = default;
+
+		~OSMSegment();
+		
+		// ---- evaluation functions ---- //
+
+		void reindexMap(bool merge=false);
+		void recalculateBoundaries();
+
+		// ---- Size functions (inherited ---- //
 
 		size_t getManagedSize() const;
 		size_t getSize() const;
 
-		void toJson(json& json) const;
-
-		XMLMap(const XMLMap&) = delete;
-		XMLMap(XMLMap&&) = default;
-
-		XMLMap& operator=(const XMLMap&) = delete;
-		XMLMap& operator=(XMLMap&&) = default;
-
-		void recalculateBoundaries();
-		void createSegmentMap() const;
 
 		/// (1) Returns whether this map has any nodes
 		/// (2) Returns whether this map has any ways
 		/// (3) Returns whether this map has any relations
 		/// (4) Returns whether this map holds any objects
-		bool hasNodes() const;
-		bool hasWays() const;
-		bool hasRelations() const;
-		bool empty() const;
+		bool hasNodes() const noexcept;
+		bool hasWays() const noexcept;
+		bool hasRelations() const noexcept;
+		bool empty() const noexcept;
 
 		/// (1) Maps a node index to the position in the list
 		/// (2) Maps a way index to the position in the list
 		/// (3) Maps a relation index to the position in the list
 		size_t getNodeIndex(int64_t id) const;
-		size_t getWayIndex(int64_t id) const;
-		size_t getRelationIndex(int64_t id) const;
+		size_t getWayIndex(int64_t id) const; // Returns only the first entry
+		size_t getRelationIndex(int64_t id) const; // Returns only the first entry
+
+		const std::vector<size_t>& getWayIndices(int64_t id) const;
+		const std::vector<size_t>& getRelationIndices(int64_t id) const;
 
 		bool hasNodeIndex(int64_t id) const;
 		bool hasWayIndex(int64_t id) const;
@@ -490,8 +518,11 @@ namespace traffic
 		/// (2) Adds a new way to this map
 		/// (3) Adds a new relation to this map
 		bool addNode(const OSMNode& nd, bool updateBoundaries = true);
-		bool addWay(const OSMWay& wd, const XMLMap& map, bool addChildren = true, bool updateBoundaries = true);
-		bool addRelation(const OSMRelation& re, const XMLMap& map, bool addChildren = true, bool updateBoundaries = true);
+		bool addWay(const OSMWay& wd);
+		bool addRelation(const OSMRelation& re);
+
+		bool addWayRecursive(const OSMWay &way, const OSMSegment& lookup, bool updateBounds=true);
+		bool addRelationRecursive(const OSMRelation &re, const OSMSegment& lookup, bool updateBounds=true);
 
 		/// Finds all nodes that satisfy the given functions
 		/// FuncNodes&& this function takes a const OSMNode& and returns a boolean
@@ -499,17 +530,17 @@ namespace traffic
 		/// FuncWays&& this function takes a const OSMWay& and returns a boolean
 		///		that marks whether this way is accepted
 		template<typename FuncNodes, typename FuncWays, typename FuncWayNodes>//, typename AcceptRelation>
-		XMLMap findNodes(
+		OSMSegment findNodes(
 			FuncNodes&& funcNodes,
 			FuncWays&& funcWays,
 			FuncWayNodes&& funcWayNodes
 			//AcceptRelation&& funcRel
 		) const {
-			XMLMap map;
-			for (const OSMNode nd : (*nodeList)) {
+			OSMSegment map;
+			for (const OSMNode &nd : (*nodeList)) {
 				if (funcNodes(nd)) map.addNode(nd, false);
 			}
-			for (const OSMWay wd : (*wayList)) {
+			for (const OSMWay &wd : (*wayList)) {
 				if (funcWays(wd)) {
 					auto st = std::make_shared<std::vector<int64_t>>();
 					for (int64_t id : wd.getNodes()) {
@@ -518,7 +549,7 @@ namespace traffic
 					}
 					if (!st->empty()) {
 						OSMWay w(wd.getID(), wd.getVer(), move(st), wd.getData());
-						map.addWay(w, *this, true, false);
+						map.addWayRecursive(w, *this);
 					}
 				}
 			}
@@ -540,36 +571,100 @@ namespace traffic
 
 		/// (1) Finds all nodes that are located in a given rectangle
 		/// (2) Finds all nodes that are located in a given rectangle
-		XMLMap findSquareNodes(float lowerLat, float upperLat, float lowerLon, float upperLon) const;
-		XMLMap findSquareNodes(const Rect& rect) const;
+		OSMSegment findSquareNodes(float lowerLat, float upperLat, float lowerLon, float upperLon) const;
+		OSMSegment findSquareNodes(const Rect& rect) const;
 		/// (1) Finds all nodes that have the given tag
 		/// (2) Finds all ways that have the given tag
-		XMLMap findTagNodes(const std::string& tag) const;
-		XMLMap findTagWays(const std::string& tag) const;
+		OSMSegment findTagNodes(const std::string& tag) const;
+		OSMSegment findTagWays(const std::string& tag) const;
 
-		XMLMap findCircleNode(const Circle& circle) const;
+		OSMSegment findCircleNode(const Circle& circle) const;
 
 		/// (1) Returns the (const) node list
 		/// (2) Returns the (const) way list
 		/// (3) Returns the (const) relation list
-		std::shared_ptr<std::vector<OSMNode>>& getNodes();
-		std::shared_ptr<std::vector<OSMWay>>& getWays();
-		std::shared_ptr<std::vector<OSMRelation>>& getRelations();
-
-		const std::shared_ptr<std::vector<OSMNode>>& getNodes() const;
-		const std::shared_ptr<std::vector<OSMWay>>& getWays() const;
-		const std::shared_ptr<std::vector<OSMRelation>>& getRelations() const;
+		const std::shared_ptr<std::vector<OSMNode>>& getNodes() const noexcept;
+		const std::shared_ptr<std::vector<OSMWay>>& getWays() const noexcept;
+		const std::shared_ptr<std::vector<OSMRelation>>& getRelations() const noexcept;
 
 		void summary() const;
 
 		/// (1) Returns the node map
 		/// (2) Returns the way map
 		/// (3) Returns the relation map
-		inline std::shared_ptr<map_t> getNodeMap() { return nodeMap; }
-		inline std::shared_ptr<map_t> getWayMap() { return wayMap; }
-		inline std::shared_ptr<map_t> getRelationMap() { return relationMap; }
-		inline Rect getRect() const { return Rect::fromBorders(lowerLat, upperLat, lowerLon, upperLon); }
+		const std::shared_ptr<map_t>& getNodeMap() const noexcept;
+		const std::shared_ptr<mapid_t<std::vector<size_t>>>& getWayMap() const noexcept;
+		const std::shared_ptr<mapid_t<std::vector<size_t>>>& getRelationMap() const noexcept;
+		Rect getBoundingBox() const noexcept;
+		void setBoundingBox(const Rect &r) noexcept;
 	};
+
+	struct OSMMapBuffer {
+		uint32_t chunk;
+	};
+
+	class OSMMap
+	{
+	public:
+		explicit OSMMap(const std::shared_ptr<OSMSegment>& map, prec_t chunkSize = 0.005);
+		
+		void insertSegment(const OSMSegment &segment);
+		void recalculateChunks();
+
+		const OSMSegment& getSegmentByNode(int64_t id) const;
+		const OSMSegment& getSegment(prec_t lat, prec_t lon) const;
+		const OSMNode& getNode(int64_t nodeID) const;
+		const OSMWay& getWay(int64_t wayID) const;
+		const OSMRelation& getRelation(int64_t relationID) const;
+
+		size_t getSegmentIndexByNode(int64_t nodeID) const;
+		const std::vector<size_t>& getSegmentIndexByWay(int64_t wayID) const;
+		const std::vector<size_t>& getSegmentIndexByRelation(int64_t nodeID) const;
+		size_t getSegmentIndex(prec_t lat, prec_t lon) const;
+
+		/// (1) Adds a new node to this map
+		/// (2) Adds a new way to this map
+		/// (3) Adds a new relation to this map
+		bool addNode(const OSMNode& nd);
+		bool addWayRecursive(const OSMWay& way, const OSMSegment& lookup);
+		bool addRelationRecursive(const OSMRelation& re, const OSMSegment& lookup);
+
+		// ---- Coordinate transformation ---- //
+		size_t latCoordToGlobal(prec_t coord) const;
+		prec_t latGlobalToCoord(size_t global) const;
+		size_t latLocalToGlobal(size_t local) const;
+		size_t latGlobalToLocal(size_t global) const;
+		size_t latCoordToLocal(prec_t coord) const;
+		prec_t latLocalToCoord(size_t local) const;
+
+
+		size_t lonCoordToGlobal(prec_t coord) const;
+		prec_t lonGlobalToCoord(size_t global) const;
+		size_t lonLocalToGlobal(size_t local) const;
+		size_t lonGlobalToLocal(size_t global) const;
+		size_t lonCoordToLocal(prec_t coord) const;
+		prec_t lonLocalToCoord(size_t local) const;
+
+		size_t toStore(prec_t lat, prec_t lon) const;
+		size_t toStore(size_t localLat, size_t localLon) const;
+
+		const std::vector<OSMSegment>& getChunks() const;
+		size_t keyCheck(size_t index) const;
+
+	protected:
+		// ---- Member definitions ---- //
+		mapid_t<size_t> m_nodemap;
+		mapid_t<std::vector<size_t>> m_waymap;
+		mapid_t<std::vector<size_t>> m_relationmap;
+		std::vector<size_t> noValues;
+
+		Rect boundingBox;
+		prec_t m_chunkSize;
+		std::vector<OSMSegment> m_chunks;
+		size_t m_latChunks, m_lonChunks;
+		size_t m_latOffset, m_lonOffset;
+	};
+
 } // namespace traffic
 
 // Experimental !!
@@ -615,7 +710,7 @@ namespace traffic
 
 	class GlobalXMLMap {
 	protected:
-		std::vector<XMLMap> childMaps;
+		std::vector<OSMSegment> childMaps;
 	};
 
 	// Converts nodes to json files
@@ -634,7 +729,7 @@ namespace traffic
 	inline void to_json(json& j, const OSMMapObject& map) { map.toJson(j); }
 	inline void from_json(const json& j, OSMMapObject& map) { map = OSMMapObject(j); }
 
-	void debugTags(const XMLMap& map);
+	void debugTags(const OSMSegment& map);
 } // namespace traffic
 
 #endif

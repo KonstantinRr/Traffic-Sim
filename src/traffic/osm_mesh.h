@@ -37,10 +37,17 @@
 
 namespace traffic
 {
-    glm::vec2 sphereToPlane(glm::vec2 latLon, glm::vec2 center);
-    glm::vec2 sphereToPlane(glm::vec2 latLon);
+    double planeToLatitude(double planeLat, glm::dvec2 center);
+    double planeToLongitude(double planeLon, glm::dvec2 center);
+    double latitudeToPlane(double lat, glm::dvec2 center);
+    double longitudeToPlane(double lon, glm::dvec2 center);
 
-    std::vector<glm::vec2> generateMesh(const XMLMap& map);
+    
+
+    glm::dvec2 sphereToPlane(glm::dvec2 latLon, glm::dvec2 center);
+    glm::dvec2 sphereToPlane(glm::dvec2 latLon);
+
+    std::vector<glm::vec2> generateMesh(const OSMSegment& map);
     std::vector<glm::vec2> generateChunkMesh(const World& world);
     void unify(std::vector<glm::vec2> &points);
 

@@ -110,9 +110,6 @@ struct ParseInfo
 	vector<OSMRelation> relationList;
 	vector<atomic<bool>> values;
 
-	map_t nodeMap;
-	map_t wayMap;
-	map_t relationMap;
 	unordered_map<string, uint16_t> tagMap;
 };
 
@@ -450,7 +447,7 @@ bool ParseTask::parseTag(xml_node<char>* node,
 	return true;
 }
 
-XMLMap traffic::parseXMLMap(const ParseArguments &args)
+OSMSegment traffic::parseXMLMap(const ParseArguments &args)
 {
 	if (args.timings)
 		args.timings->begin = high_resolution_clock::now();
@@ -525,28 +522,15 @@ XMLMap traffic::parseXMLMap(const ParseArguments &args)
 	if (!args.pool) {
 		delete usedPool;
 	}
-	info.nodeMap.reserve(info.nodeList.size());
-	info.wayMap.reserve(info.wayList.size());
-	info.relationMap.reserve(info.relationList.size());
-
-	for (size_t i = 0; i < info.nodeList.size(); i++)
-		info.nodeMap[info.nodeList[i].getID()] = i;
-	for (size_t i = 0; i < info.wayList.size(); i++)
-		info.wayMap[info.wayList[i].getID()] = i;
-	for (size_t i = 0; i < info.relationList.size(); i++)
-		info.relationMap[info.relationList[i].getID()] = i;
 
 	// Prints some diagnostics about the program
 	if (args.timings)
 		args.timings->endDataParse = chrono::high_resolution_clock::now();
 
-	return XMLMap(
+	return OSMSegment(
 		make_shared<vector<OSMNode>>(move(info.nodeList)),
 		make_shared<vector<OSMWay>>(move(info.wayList)),
-		make_shared<vector<OSMRelation>>(move(info.relationList)),
-		make_shared<map_t>(move(info.nodeMap)),
-		make_shared<map_t>(move(info.wayMap)),
-		make_shared<map_t>(move(info.relationMap))
+		make_shared<vector<OSMRelation>>(move(info.relationList))
 	);
 }
 

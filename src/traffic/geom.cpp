@@ -56,7 +56,7 @@ glm::vec2 traffic::Point::toVec() const
 }
 
 /*
-XMLMap XMLMap::findCircleNode(const Circle &circle)
+OSMSegment OSMSegment::findCircleNode(const Circle &circle)
 {
 	findNodes([&](const OSMNode& nd) {
 		return circle.contains(Point(nd.getLat(), nd.getLon()));

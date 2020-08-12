@@ -39,29 +39,49 @@ using namespace glm;
 using namespace std;
 using namespace traffic;
 
-constexpr float Pi = 3.14159f;
+constexpr double Pi = 3.141592653589793238462643383279502;
 
-vec2 traffic::sphereToPlane(vec2 latLon, vec2 center) {
-	return vec2(
-		(float)(latLon.x * cos((double)center.y * Pi / 180.0)),
+double traffic::planeToLatitude(double planeLat, dvec2 center)
+{
+	return planeLat / cos(center.y * Pi / 180.0);
+}
+
+double traffic::planeToLongitude(double planeLon, dvec2 center)
+{
+	return planeLon;
+}
+
+double traffic::latitudeToPlane(double lat, dvec2 center)
+{
+	return lat * cos(center.y * Pi / 180.0);
+}
+
+double traffic::longitudeToPlane(double lon, dvec2 center)
+{
+	return lon;
+}
+
+dvec2 traffic::sphereToPlane(dvec2 latLon, dvec2 center) {
+	return dvec2(
+		latLon.x * cos(center.y * Pi / 180.0),
 		latLon.y
 	);
 }
 
-glm::vec2 traffic::sphereToPlane(glm::vec2 latLon)
+dvec2 traffic::sphereToPlane(dvec2 latLon)
 {
-	return vec2(
+	return dvec2(
 		(float)(latLon.x * cos((double)latLon.y * Pi / 180.0)),
 		latLon.y
 	);
 }
 
 
-std::vector<glm::vec2> traffic::generateMesh(const XMLMap& map) {
+std::vector<glm::vec2> traffic::generateMesh(const OSMSegment& map) {
 	auto& nodeList = *(map.getNodes());
 	std::vector<glm::vec2> points;
 
-	Point centerP = map.getRect().getCenter();
+	Point centerP = map.getBoundingBox().getCenter();
 	vec2 center(centerP.getLongitude(), centerP.getLatitude());
 
 	for (const OSMWay& wd : (*map.getWays())) {
@@ -91,7 +111,7 @@ std::vector<glm::vec2> traffic::generateMesh(const XMLMap& map) {
 std::vector<glm::vec2> traffic::generateChunkMesh(const World& world)
 {
 	std::vector<glm::vec2> positions;
-	glm::vec2 center = world.getMap()->getRect().getCenter().toVec();
+	glm::vec2 center = world.getMap()->getBoundingBox().getCenter().toVec();
 	for (const WorldChunk& chunk : world.getChunks())
 	{
 		const Rect box = chunk.getBoundingBox();

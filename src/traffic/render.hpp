@@ -36,7 +36,7 @@
 
 
 namespace traffic {
-    //lt::resource::MeshBuilder2D convertToMesh(const XMLMap &map);
+    //lt::resource::MeshBuilder2D convertToMesh(const OSMSegment &map);
     enum FitSize {
 		SCALE, FIT_WIDTH, FIT_HEIGHT
 	};
@@ -45,13 +45,13 @@ namespace traffic {
 		prec_t ratioLat, ratioLon, lowerLat, lowerLon;
 
 		RenderParams(const Rect &r, FitSize fit, size_t width, size_t height);
-		RenderParams(const XMLMap &map, const lt::ImageRGB8 &image, FitSize fit);
+		RenderParams(const OSMSegment &map, const lt::ImageRGB8 &image, FitSize fit);
 	};
 
-	void generateMap(const XMLMap &map, const Rect &rect);
-	void renderMap(const XMLMap &map, prec_t containerSize);
-	void drawRoute(const XMLMap& map, const Route& route, lt::ImageRGB8 &img, const RenderParams &param);
-	void drawMap(const XMLMap& map, lt::ImageRGB8 &img, const RenderParams &param);
+	void generateMap(const OSMSegment &map, const Rect &rect);
+	void renderMap(const OSMSegment &map, prec_t containerSize);
+	void drawRoute(const OSMSegment& map, const Route& route, lt::ImageRGB8 &img, const RenderParams &param);
+	void drawMap(const OSMSegment& map, lt::ImageRGB8 &img, const RenderParams &param);
 }
 
 #endif

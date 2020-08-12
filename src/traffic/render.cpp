@@ -30,7 +30,7 @@
 using namespace traffic;
 using namespace lt;
 
-void renderMap(const XMLMap&, prec_t)
+void renderMap(const OSMSegment&, prec_t)
 {
 }
 
@@ -60,11 +60,11 @@ RenderParams::RenderParams(const Rect &r, FitSize fit, size_t width, size_t heig
 			break;
 	}
 }
-RenderParams::RenderParams(const XMLMap &map, const ImageRGB8 &img, FitSize fit)
-	: RenderParams(map.getRect(), fit, img.getXExtent(), img.getYExtent()) {}
+RenderParams::RenderParams(const OSMSegment &map, const ImageRGB8 &img, FitSize fit)
+	: RenderParams(map.getBoundingBox(), fit, img.getXExtent(), img.getYExtent()) {}
 
 void drawNodeList(
-	const XMLMap &map,
+	const OSMSegment &map,
 	const std::vector<int64_t> &nds,
 	const RenderParams &param,
 	ImageRGB8 &img, 
@@ -97,7 +97,7 @@ void drawNodeList(
 }
 
 void traffic::drawRoute(
-	const XMLMap &map,
+	const OSMSegment &map,
 	const Route &route,
 	ImageRGB8 &img,
 	const RenderParams &param
@@ -107,7 +107,7 @@ void traffic::drawRoute(
 }
 
 void traffic::drawMap(
-	const XMLMap& map,
+	const OSMSegment& map,
 	ImageRGB8 &img,
 	const RenderParams &param
 ) {
@@ -115,7 +115,7 @@ void traffic::drawMap(
 
     bool debug = true;
 	if (debug) {
-		Rect r = map.getRect();
+		Rect r = map.getBoundingBox();
 		printf("Difference in lat: %f (max: %f, min: %f)",
 			r.latDistance(), r.upperLatBorder(), r.lowerLatBorder());
 		printf("Difference in lon: %f (max: %f, min: %f)",

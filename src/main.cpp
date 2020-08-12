@@ -20,6 +20,7 @@
 #include <nanogui/canvas.h>
 #include <nanogui/shader.h>
 #include <nanogui/renderpass.h>
+#include <nanogui/formhelper.h>
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
@@ -27,6 +28,8 @@
 #include <vector>
 
 #include <cptl.hpp>
+
+#include "mapcanvas.h"
 
 #include "traffic/osm.h"
 #include "traffic/osm_graph.h"
@@ -52,7 +55,19 @@ using Vector4d = nanogui::Array<double, 4>;
 
 using view_t = double;
 
-std::shared_ptr<XMLMap> initMap(ctpl::thread_pool &pool)
+class FullscreenLayout : public nanogui::Layout
+{
+public:
+	virtual void perform_layout(NVGcontext* ctx, nanogui::Widget* widget) const override {
+		
+	}
+
+	virtual Vector2i preferred_size(NVGcontext* ctx, const nanogui::Widget* widget) const override {
+		return widget->parent()->size();
+	}
+};
+
+std::shared_ptr<OSMSegment> initMap(ctpl::thread_pool &pool)
 {
 	// Groningen coordinates
 	// tl,tr [53.265301,6.465842][53.265301,6.675939]
@@ -72,7 +87,7 @@ std::shared_ptr<XMLMap> initMap(ctpl::thread_pool &pool)
 	args.threads = 8;
 	args.pool = &pool;
 	args.timings = &timings;
-	auto map = std::make_shared<XMLMap>(
+	auto map = std::make_shared<OSMSegment>(
 		parseXMLMap(args));
 	timings.summary();
 	map->summary();
@@ -104,155 +119,6 @@ std::shared_ptr<XMLMap> initMap(ctpl::thread_pool &pool)
 
 
 
-class MapCanvas : public Canvas 
-{
-protected:
-	ref<Shader> m_shader;
-	ref<Shader> m_chunk_shader;
-	
-	std::shared_ptr<XMLMap> map;
-	size_t pointsSize, chunksSize;
-	bool m_active;
-	bool m_render_chunk;
-
-	Vector2d position;
-	double m_zoom;
-
-public:
-	MapCanvas(Widget* parent, std::shared_ptr<XMLMap> map) : Canvas(parent, 1) {
-		using namespace nanogui;
-		this->map = map;
-		m_active = false;
-		m_render_chunk = false;
-
-		auto centerPoint = sphereToPlane(map->getRect().getCenter().toVec());
-		position = {
-			static_cast<float>(-centerPoint.x),
-			static_cast<float>(-centerPoint.y)};
-		m_zoom = 25.0f;
-		m_chunk_shader = new Shader(
-			render_pass(), "shader_chunk",
-			getChunkVertex(), getChunkFragment()
-		);
-		m_shader = new Shader(
-			render_pass(), "shader_map",
-			getLineVertex(), getLineFragment()
-		);
-	}
-
-	Vector2d transformView(Vector2i vec) {
-		return Vector2d(
-			(double)vec.x() * 2.0 / width(),
-			(double)-vec.y() * 1.0 / height()
-		);
-	}
-
-	
-	virtual bool mouse_button_event(
-		const Vector2i& p, int button, bool down, int modifiers) override
-	{
-		return Canvas::mouse_button_event(p, button, down, modifiers);
-	}
-
-	virtual bool mouse_drag_event(
-		const Vector2i& p, const Vector2i& rel, int button, int modifiers) override
-	{
-		Canvas::mouse_drag_event(p, rel, button, modifiers);
-		position += transformView(rel) / m_zoom;
-		return true;
-	}
-	
-	virtual bool scroll_event(const Vector2i& p, const Vector2f& rel)
-	{
-		Canvas::scroll_event(p, rel);
-		m_zoom = std::clamp(m_zoom * pow(0.94, -rel.y()), 2.0, 1000.0);
-		return true;
-	}
-
-	void setData(
-		std::shared_ptr<std::vector<glm::vec3>> colors,
-		std::shared_ptr<std::vector<glm::vec2>> points) {
-		using namespace nanogui;
-		pointsSize = points->size();
-		m_shader->set_buffer("vVertex", VariableType::Float32,
-			{ points->size(), 2 }, points->data());
-		m_shader->set_buffer("color", VariableType::Float32,
-			{ colors->size(), 3 }, colors->data());
-	}
-
-	void setChunkData(
-		std::shared_ptr<std::vector<glm::vec2>> points) {
-		using namespace nanogui;
-		chunksSize = points->size();
-		m_chunk_shader->set_buffer("vVertex", VariableType::Float32,
-			{ points->size(), 2 }, points->data());
-	}
-
-	void setActive(bool active) {
-		m_active = true;
-	}
-
-	void set_zoom(double zoom) {
-		m_zoom = zoom;
-	}
-
-	void updateKeys() {
-		//TrafficApplication* app = static_cast<TrafficApplication*>(parent());
-		/*
-		window().
-		int v = 0;
-		double arrowSpeed = 0.05;
-		case GLFW_KEY_E: v = -1; break;
-		case GLFW_KEY_R: v = 1; break;
-		case GLFW_KEY_LEFT:		position += Vector2d(-arrowSpeed, 0.0) / m_zoom; break;
-		case GLFW_KEY_RIGHT:	position += Vector2d(arrowSpeed, 0.0) / m_zoom; break;
-		case GLFW_KEY_UP:		position += Vector2d(0.0, -arrowSpeed) / m_zoom; break;
-		case GLFW_KEY_DOWN:		position += Vector2d(0.0, arrowSpeed) / m_zoom; break;
-		m_zoom = std::clamp(m_zoom * pow(0.94, v), 2.0, 1000.0);
-		*/
-	}
-
-	virtual void draw_contents() override {
-		using namespace nanogui;
-		set_size(parent()->size());
-		if (m_active) {
-			Matrix4f matrix = Matrix4f::translate(
-				Vector3f(position.x(), position.y(), 0.0f));
-			Matrix4f scale = Matrix4f::scale(
-				Vector3f(m_zoom, m_zoom * width() / height(), 1.0f));
-
-			if (m_render_chunk)
-			{
-				m_chunk_shader->set_uniform("mvp", scale * matrix);
-				m_chunk_shader->set_uniform("color", Vector4f(1.0f, 0.0f, 0.0f, 1.0f));
-				m_chunk_shader->begin();
-				m_shader->draw_array(Shader::PrimitiveType::Line, 0, chunksSize, false);
-				m_chunk_shader->end();
-			}
-
-			m_shader->set_uniform("mvp", scale * matrix);
-			m_shader->begin();
-			m_shader->draw_array(Shader::PrimitiveType::Line, 0, pointsSize, false);
-			m_shader->end();
-		}
-	}
-
-	virtual bool keyboard_event(int key, int scancode, int action, int modifiers) override {
-		int v = 0;
-		double arrowSpeed = 0.05;
-		switch (key) {
-			case GLFW_KEY_E: v = -1; break;
-			case GLFW_KEY_R: v = 1; break;
-			case GLFW_KEY_LEFT:		position += Vector2d(-arrowSpeed, 0.0) / m_zoom; break;
-			case GLFW_KEY_RIGHT:	position += Vector2d(arrowSpeed, 0.0) / m_zoom; break;
-			case GLFW_KEY_UP:		position += Vector2d(0.0, -arrowSpeed) / m_zoom; break;
-			case GLFW_KEY_DOWN:		position += Vector2d(0.0, arrowSpeed) / m_zoom; break;
-		}
-		m_zoom = std::clamp(m_zoom * pow(0.94, v), 2.0, 1000.0);
-		return v != 0;
-	}
-};
-
 class TrafficApplication : public nanogui::Screen
 {
 public:
@@ -262,38 +128,52 @@ public:
 	{
 		using namespace nanogui;
 		auto map = initMap(pool);
-		world = std::make_shared<World>(map, 0.005);
+		world = std::make_shared<World>(map);
 		auto points = std::make_shared<std::vector<glm::vec2>>(generateMesh(*map));
 		auto colors = std::make_shared<std::vector<glm::vec3>>(points->size(), glm::vec3( 1.0f, 1.0f, 1.0f));
 		//for (size_t i = 0; i < colors->size(); i++)
 		//	(*colors)[i] = glm::vec3(rand() % 256 / 255.0f, rand() % 256 / 255.0f, rand() % 256 / 255.0f);
-		auto chunks = std::make_shared<std::vector<glm::vec2>>(generateChunkMesh(*world));
+		//auto chunks = std::make_shared<std::vector<glm::vec2>>(generateChunkMesh(*world));
+
 
 		m_canvas = new MapCanvas(this, map);
+		m_canvas->set_layout(new FullscreenLayout());
 		m_canvas->setData(colors, points);
-		m_canvas->setChunkData(chunks);
+		//m_canvas->setChunkData(chunks);
 		m_canvas->setActive(true);
 		m_canvas->set_background_color({ 100, 100, 100, 255 });
 
-		Window* window = new Window(this, "Canvas widget demo");
-		window->set_position(Vector2i(15, 15));
-		window->set_layout(new GroupLayout());
 
-		Widget* tools = new Widget(window);
-		tools->set_layout(new BoxLayout(Orientation::Horizontal, Alignment::Middle, 0, 5));
+		MapForm* form = new MapForm(this, m_canvas);
+		FormHelper *gui = new FormHelper(this);
+		gui->set_fixed_size(Vector2i(100, 20));
+		ref<Window> window = gui->add_window(Vector2i(10, 10), "Action Panel");
 
-		Button* b0 = new Button(tools, "Random Background");
-		b0->set_callback([this]() {
-			m_canvas->set_background_color(
-				Vector4i(rand() % 256, rand() % 256, rand() % 256, 255));
-			});
+		int64_t a = 0;
+		int32_t ver = 0;
+		gui->add_group("General");
+		gui->add_variable("ID", a);
+		gui->add_variable("Version", ver);
 
-		Button* b1 = new Button(tools, "Random Rotation");
-		b1->set_callback([this]() {
-			//m_canvas->set_rotation((float)Pi * rand() / (float)RAND_MAX);
-			});
+		gui->add_button("Choose File", [this, &a, gui]() {
+			using namespace std;
+			vector<pair<string, string>> vect{
+				make_pair<string, string>("xmlmap", "OSM File format"),
+				make_pair<string, string>("osm", "OSM File format"),
+			};
+			a = 10;
+			gui->refresh();
+			file_dialog(vect, true);
+		});
+
+		gui->refresh();
+
+		// Applies the forms
+		m_canvas->setForm(form);
+
 
 		perform_layout();
+		lastTime = glfwGetTime();
 	}
 
 	virtual bool keyboard_event(int key, int scancode, int action, int modifiers) {
@@ -306,15 +186,28 @@ public:
 		return false;
 	}
 
+	void update() {
+		double nextTime = glfwGetTime();
+		double dt = nextTime - lastTime;
+		m_canvas->update(dt);
+		lastTime = nextTime;
+		
+	}
+
 	virtual void draw(NVGcontext* ctx) {
+		update();
 		Screen::draw(ctx);
 	}
 
 protected:
+	double lastTime;
 	ctpl::thread_pool pool;
 	MapCanvas* m_canvas;
 	std::shared_ptr<World> world;
 };
+
+
+
 
 int main(int argc, char** argv)
 {
@@ -325,7 +218,7 @@ int main(int argc, char** argv)
 			nanogui::ref<TrafficApplication> app = new TrafficApplication();
 			app->draw_all();
 			app->set_visible(true);
-			nanogui::mainloop(1 / 60.f * 1000);
+			nanogui::mainloop((float)(1.0 / 60.0 * 1000.0));
 		}
 		nanogui::shutdown();
 	}
@@ -342,4 +235,40 @@ int main(int argc, char** argv)
 	}
 
 	return 0;
+}
+
+MapForm::MapForm(nanogui::Screen* parent, MapCanvas *canvas) : FormHelper(parent)
+{
+	m_canvas = canvas;
+	set_fixed_size(Vector2i(100, 20));
+	m_window = add_window(Vector2i(10, 10), "Position panel");
+	add_group("Position");
+	add_variable<double>("Latitude",
+		[this](double value) { if (this->m_canvas) this->m_canvas->setLatitude(value); },
+		[this]() { return this->m_canvas ? (double)this->m_canvas->getLatitude() : 0.0; });
+	add_variable<double>("Longitude",
+		[this](double value) { if (this->m_canvas) this->m_canvas->setLongitude(value); },
+		[this]() { return this->m_canvas ? (double)this->m_canvas->getLongitude() : 0.0f; });
+	add_variable<double>("Zoom",
+		[this](double value) { if (m_canvas) m_canvas->setZoom(value); },
+		[this]() { return m_canvas ? m_canvas->getZoom() : 0.0; });
+
+	add_group("Cursor");
+	add_variable<double>("Latitude",
+		[this](double value) { },
+		[this]() { return m_canvas ? m_canvas->getCursorLatitude() : 0.0; }, false);
+	add_variable<double>("Longitude",
+		[this](double val) { },
+		[this]() { return m_canvas ? m_canvas->getCursorLongitude() : 0.0; }, false);
+
+}
+
+MapCanvas* MapForm::getCanvas() const noexcept
+{
+	return m_canvas;
+}
+
+void MapForm::setCanvas(MapCanvas* canvas) noexcept
+{
+	m_canvas = canvas;
 }

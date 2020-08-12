@@ -118,49 +118,24 @@ namespace traffic
         std::vector<int64_t> m_agents;
     };
 
+
     class World
     {
     public:
         // ---- Contstructors ---- //
-        World(const std::shared_ptr<XMLMap> &map, prec_t chunkSize);
+        World(const std::shared_ptr<OSMSegment> &map);
 
         // ---- Functions ---- //
-        const std::shared_ptr<XMLMap>& getMap() const;
+        const std::shared_ptr<OSMSegment>& getMap() const;
         const std::shared_ptr<Graph>& getGraph() const;
         const std::vector<Agent>& getAgents() const;
-        const std::vector<WorldChunk>& getChunks() const;
-        void recalculateChunks();
-        
-        // ---- Coordinate transformation ---- //
-        size_t latCoordToGlobal(prec_t coord) const;
-        prec_t latGlobalToCoord(size_t global) const;
-        size_t latLocalToGlobal(size_t local) const;
-        size_t latGlobalToLocal(size_t global) const;
-        size_t latCoordToLocal(prec_t coord) const;
-        prec_t latLocalToCoord(size_t local) const;
-
-
-        size_t lonCoordToGlobal(prec_t coord) const;
-        prec_t lonGlobalToCoord(size_t global) const;
-        size_t lonLocalToGlobal(size_t local) const;
-        size_t lonGlobalToLocal(size_t global) const;
-        size_t lonCoordToLocal(prec_t coord) const;
-        prec_t lonLocalToCoord(size_t local) const;
-
-        size_t toStore(prec_t lat, prec_t lon) const;
-        size_t toStore(size_t localLat, size_t localLon) const;
-
+        const std::vector<WorldChunk>& getChunks() const { return {}; }
 
     protected:
         // ---- Member definitions ---- //
-        prec_t m_chunkSize;
-        std::shared_ptr<XMLMap> m_map;
+        std::shared_ptr<OSMSegment> m_map;
         std::shared_ptr<Graph> m_graph;
         std::vector<Agent> m_agents;
-
-        std::vector<WorldChunk> m_chunks;
-        size_t m_latChunks, m_lonChunks;
-        size_t m_latOffset, m_lonOffset;
     }; 
 } // namespace traffic
 

@@ -55,8 +55,10 @@ using float64 = double;
 using prec_t = float;
 using map_index_t = uint32_t;
 using map_t = robin_hood::unordered_flat_map<int64_t, map_index_t>;
+using chunkmap_t = robin_hood::unordered_flat_map<int64_t, map_index_t>;
 
-
+template<typename c_type>
+using mapid_t = robin_hood::unordered_flat_map<int64_t, c_type>;
 class SizeObject
 {
 public:

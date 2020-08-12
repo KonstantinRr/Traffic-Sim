@@ -97,8 +97,8 @@ namespace traffic
 			ways(ways), relations(relations) { }
 	};
 
-	std::vector<unsigned char> writeXOSMMap(const XMLMap &map, const std::string &file);
-	XMLMap parseXMLMap(const ParseArguments &args);
+	std::vector<unsigned char> writeXOSMMap(const OSMSegment &map, const std::string &file);
+	OSMSegment parseXMLMap(const ParseArguments &args);
 } // namespace traffic
 
 #endif

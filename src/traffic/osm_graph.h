@@ -129,7 +129,7 @@ namespace traffic
 		/// by at least one way is appended as GraphNode to this graph</summary>
 		/// <param name="xmlmap">The OSM map that is converted</param>
 		/// <returns></returns>
-		Graph(const std::shared_ptr<XMLMap> &xmlmap);
+		Graph(const std::shared_ptr<OSMSegment> &xmlmap);
 
 		virtual ~Graph() = default;
 
@@ -161,11 +161,11 @@ namespace traffic
 
 		graphmap_t& getMap();
 		std::vector<GraphNode>& getBuffer();
-		std::shared_ptr<XMLMap> getXMLMap();
+		std::shared_ptr<OSMSegment> getXMLMap();
 
 		const graphmap_t& getMap() const;
 		const std::vector<GraphNode>& getBuffer() const;
-		std::shared_ptr<const XMLMap> getXMLMap() const;
+		std::shared_ptr<const OSMSegment> getXMLMap() const;
 
 		size_t countNodes() const;
 		size_t countEdges() const;
@@ -180,7 +180,7 @@ namespace traffic
 	protected:
 		std::vector<GraphNode> graphBuffer;
 		graphmap_t graphMap;
-		std::shared_ptr<XMLMap> xmlmap;
+		std::shared_ptr<OSMSegment> xmlmap;
 	};
 }
 

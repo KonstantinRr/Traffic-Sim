@@ -12,6 +12,7 @@ set(SPDLOG_FMT_EXTERNAL ON)
 
 set(SOURCE
    ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/mapcanvas.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/geom.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm.cpp
    ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm_mesh.cpp
