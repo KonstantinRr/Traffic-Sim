@@ -669,6 +669,10 @@ const shared_ptr<vector<OSMNode>>& OSMSegment::getNodes() const noexcept { retur
 const shared_ptr<vector<OSMWay>>& OSMSegment::getWays() const noexcept { return wayList; }
 const shared_ptr<vector<OSMRelation>>& OSMSegment::getRelations() const noexcept { return relationList; }
 
+size_t traffic::OSMSegment::getNodeCount() const noexcept { return nodeList->size();  }
+size_t traffic::OSMSegment::getWayCount() const noexcept { return wayList->size();  }
+size_t traffic::OSMSegment::getRelationCount() const noexcept { return relationList->size();  }
+
 const std::shared_ptr<map_t>& OSMSegment::getNodeMap() const noexcept { return nodeMap; }
 const std::shared_ptr<mapid_t<std::vector<size_t>>>& OSMSegment::getWayMap() const noexcept { return wayMap; }
 const std::shared_ptr<mapid_t<std::vector<size_t>>>& OSMSegment::getRelationMap() const noexcept { return relationMap; }

@@ -154,7 +154,14 @@ void traffic::unify(std::vector<glm::vec2>& points)
 // ---- Shaders ---- //
 const char * lineVert = R"(
 #version 330
+
+#define MAT3 0
+
+#if MAT3
+uniform mat3 mvp;
+#else
 uniform mat4 mvp;
+#endif
 
 in vec2 vVertex;
 in vec3 color;
@@ -163,7 +170,12 @@ out vec3 mixedColor;
 
 void main(void)
 {
+#if MAT3
+	gl_Position = vec4(mvp * vec3(vVertex, 0.0), 1.0);
+#else
 	gl_Position = mvp * vec4(vVertex, 0.0, 1.0);
+#endif
+
 	mixedColor = color;
 })";
 

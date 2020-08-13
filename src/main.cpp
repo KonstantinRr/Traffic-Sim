@@ -122,61 +122,15 @@ std::shared_ptr<OSMSegment> initMap(ctpl::thread_pool &pool)
 class TrafficApplication : public nanogui::Screen
 {
 public:
-	TrafficApplication() : nanogui::Screen(
-		Vector2i(800, 600), "TrafficSim", true),
-		pool(12)
-	{
-		using namespace nanogui;
-		auto map = initMap(pool);
-		world = std::make_shared<World>(map);
-		auto points = std::make_shared<std::vector<glm::vec2>>(generateMesh(*map));
-		auto colors = std::make_shared<std::vector<glm::vec3>>(points->size(), glm::vec3( 1.0f, 1.0f, 1.0f));
-		//for (size_t i = 0; i < colors->size(); i++)
-		//	(*colors)[i] = glm::vec3(rand() % 256 / 255.0f, rand() % 256 / 255.0f, rand() % 256 / 255.0f);
-		//auto chunks = std::make_shared<std::vector<glm::vec2>>(generateChunkMesh(*world));
+	TrafficApplication();
 
-
-		m_canvas = new MapCanvas(this, map);
-		m_canvas->set_layout(new FullscreenLayout());
-		m_canvas->setData(colors, points);
-		//m_canvas->setChunkData(chunks);
-		m_canvas->setActive(true);
-		m_canvas->set_background_color({ 100, 100, 100, 255 });
-
-
-		MapForm* form = new MapForm(this, m_canvas);
-		FormHelper *gui = new FormHelper(this);
-		gui->set_fixed_size(Vector2i(100, 20));
-		ref<Window> window = gui->add_window(Vector2i(10, 10), "Action Panel");
-
-		int64_t a = 0;
-		int32_t ver = 0;
-		gui->add_group("General");
-		gui->add_variable("ID", a);
-		gui->add_variable("Version", ver);
-
-		gui->add_button("Choose File", [this, &a, gui]() {
-			using namespace std;
-			vector<pair<string, string>> vect{
-				make_pair<string, string>("xmlmap", "OSM File format"),
-				make_pair<string, string>("osm", "OSM File format"),
-			};
-			a = 10;
-			gui->refresh();
-			file_dialog(vect, true);
-		});
-
-		gui->refresh();
-
-		// Applies the forms
-		m_canvas->setForm(form);
-
-
-		perform_layout();
-		lastTime = glfwGetTime();
+	virtual bool resize_event(const Vector2i& size) override {
+		nanogui::Screen::resize_event(size);
+		m_canvas->set_size(size);
+		return true;
 	}
 
-	virtual bool keyboard_event(int key, int scancode, int action, int modifiers) {
+	virtual bool keyboard_event(int key, int scancode, int action, int modifiers) override {
 		if (Screen::keyboard_event(key, scancode, action, modifiers))
 			return true;
 		if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
@@ -203,10 +157,11 @@ protected:
 	double lastTime;
 	ctpl::thread_pool pool;
 	MapCanvas* m_canvas;
+
+	ref<MapInfo> uiInfo;
+	ref<MapForm> uiMap;
 	std::shared_ptr<World> world;
 };
-
-
 
 
 int main(int argc, char** argv)
@@ -237,38 +192,35 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-MapForm::MapForm(nanogui::Screen* parent, MapCanvas *canvas) : FormHelper(parent)
+TrafficApplication::TrafficApplication() : nanogui::Screen(
+	Vector2i(800, 600), "TrafficSim", true),
+	pool(12)
 {
-	m_canvas = canvas;
-	set_fixed_size(Vector2i(100, 20));
-	m_window = add_window(Vector2i(10, 10), "Position panel");
-	add_group("Position");
-	add_variable<double>("Latitude",
-		[this](double value) { if (this->m_canvas) this->m_canvas->setLatitude(value); },
-		[this]() { return this->m_canvas ? (double)this->m_canvas->getLatitude() : 0.0; });
-	add_variable<double>("Longitude",
-		[this](double value) { if (this->m_canvas) this->m_canvas->setLongitude(value); },
-		[this]() { return this->m_canvas ? (double)this->m_canvas->getLongitude() : 0.0f; });
-	add_variable<double>("Zoom",
-		[this](double value) { if (m_canvas) m_canvas->setZoom(value); },
-		[this]() { return m_canvas ? m_canvas->getZoom() : 0.0; });
+	using namespace nanogui;
+	auto map = initMap(pool);
+	world = std::make_shared<World>(map);
+	auto points = std::make_shared<std::vector<glm::vec2>>(generateMesh(*map));
+	auto colors = std::make_shared<std::vector<glm::vec3>>(points->size(), glm::vec3(1.0f, 1.0f, 1.0f));
 
-	add_group("Cursor");
-	add_variable<double>("Latitude",
-		[this](double value) { },
-		[this]() { return m_canvas ? m_canvas->getCursorLatitude() : 0.0; }, false);
-	add_variable<double>("Longitude",
-		[this](double val) { },
-		[this]() { return m_canvas ? m_canvas->getCursorLongitude() : 0.0; }, false);
 
-}
+	m_canvas = new MapCanvas(this, map);
+	m_canvas->set_layout(new FullscreenLayout());
+	m_canvas->setData(colors, points);
+	//m_canvas->setChunkData(chunks);
+	m_canvas->setActive(true);
+	m_canvas->set_background_color({ 100, 100, 100, 255 });
 
-MapCanvas* MapForm::getCanvas() const noexcept
-{
-	return m_canvas;
-}
+	uiMap = new MapForm(this, {10, 10}, m_canvas);
+	uiInfo = new MapInfo(this, {10, 340}, world.get());
 
-void MapForm::setCanvas(MapCanvas* canvas) noexcept
-{
-	m_canvas = canvas;
+	// Applies the forms
+	m_canvas->setForm(uiMap);
+
+
+	perform_layout();
+	//uiMap->window()->set_position({10, 10});
+	//uiInfo->window()->set_position({ 10, 10 + uiMap->window()->height() });
+	//perform_layout();
+
+	lastTime = glfwGetTime();
 }

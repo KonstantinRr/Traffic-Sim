@@ -587,6 +587,10 @@ namespace traffic
 		const std::shared_ptr<std::vector<OSMWay>>& getWays() const noexcept;
 		const std::shared_ptr<std::vector<OSMRelation>>& getRelations() const noexcept;
 
+		size_t getNodeCount() const noexcept;
+		size_t getWayCount() const noexcept;
+		size_t getRelationCount() const noexcept;
+
 		void summary() const;
 
 		/// (1) Returns the node map
