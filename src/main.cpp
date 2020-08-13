@@ -1,15 +1,28 @@
-/*
-	src/example4.cpp -- C++ version of an example application that shows
-	how to use the OpenGL widget. For a Python implementation, see
-	'../python/example4.py'.
+/// MIT License
+/// 
+/// Copyright (c) 2020 Konstantin Rolf
+/// 
+/// Permission is hereby granted, free of charge, to any person obtaining a copy
+/// of this software and associated documentation files (the "Software"), to deal
+/// in the Software without restriction, including without limitation the rights
+/// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+/// copies of the Software, and to permit persons to whom the Software is
+/// furnished to do so, subject to the following conditions:
+/// 
+/// The above copyright notice and this permission notice shall be included in all
+/// copies or substantial portions of the Software.
+/// 
+/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+/// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+/// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+/// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+/// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+/// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+/// SOFTWARE.
+/// 
+/// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
+/// July 2020
 
-	NanoGUI was developed by Wenzel Jakob <wenzel.jakob@epfl.ch>.
-	The widget drawing code is based on the NanoVG demo application
-	by Mikko Mononen.
-
-	All rights reserved. Use of this source code is governed by a
-	BSD-style license that can be found in the LICENSE.txt file.
-*/
 
 #include "traffic/engine.h"
 
@@ -26,8 +39,6 @@
 #include <algorithm>
 #include <iostream>
 #include <vector>
-
-#include <cptl.hpp>
 
 #include "mapcanvas.h"
 
@@ -55,109 +66,28 @@ using Vector4d = nanogui::Array<double, 4>;
 
 using view_t = double;
 
-class FullscreenLayout : public nanogui::Layout
-{
+class FullscreenLayout : public nanogui::Layout {
 public:
-	virtual void perform_layout(NVGcontext* ctx, nanogui::Widget* widget) const override {
-		
-	}
-
-	virtual Vector2i preferred_size(NVGcontext* ctx, const nanogui::Widget* widget) const override {
-		return widget->parent()->size();
-	}
+	virtual void perform_layout(NVGcontext* ctx, nanogui::Widget* widget) const override;
+	virtual Vector2i preferred_size(NVGcontext* ctx, const nanogui::Widget* widget) const override;
 };
 
-std::shared_ptr<OSMSegment> initMap(ctpl::thread_pool &pool)
-{
-	// Groningen coordinates
-	// tl,tr [53.265301,6.465842][53.265301,6.675939]
-	// br,bl [53.144829,6.675939][53.144829, 6.465842]	
-	//Rect initRect = Rect::fromBorders(
-	//	53.144829, 53.265301, 6.465842, 6.675939);
-
-	// Warendorf coordinates
-	// tl,tr [51.9362,7.9553][51.9362,8.0259]
-	// br,bl [51.9782,8.0259][51.9362,7.9553]
-	Rect initRect = Rect::fromBorders(
-		51.9362, 51.9782, 7.9553, 8.0259);
-
-	ParseTimings timings;
-	ParseArguments args;
-	args.file = "warendorf.xmlmap";
-	args.threads = 8;
-	args.pool = &pool;
-	args.timings = &timings;
-	auto map = std::make_shared<OSMSegment>(
-		parseXMLMap(args));
-	timings.summary();
-	map->summary();
-	
-	//*map = map->findSquareNodes(initRect);
-	/*
-	*map = map->findNodes(
-		[](const OSMNode& nd) { return nd.hasTag("highway"); },
-		[](const OSMWay& wd) { return wd.hasTag("highway"); },
-		[](const OSMWay&, const OSMNode&) { return true; }
-	);
-	*/
-	
-	map->summary();
-	return map;
-
-	//size_t size = 8192;
-	//auto img = make_shared<ImageRGB8>(drawMap(*map, size, size));
-	//writeImage(*img, "file.png", "title");
-	//printf("Creating Graph Map\n");
-	//int64_t start = (*map->getWays())[10].getNodes()[0];
-	//int64_t end = (*map->getWays())[56].getNodes()[0];
-	//Graph graph(map);
-	//graph.checkConsistency();
-	//auto route = graph.findRoute(start, end);
-	////renderMap();
-	//printf("Finished %d\n", route.nodes.size());
-}
-
-
-
-class TrafficApplication : public nanogui::Screen
-{
+class TrafficApplication : public nanogui::Screen {
 public:
 	TrafficApplication();
+	// ---- Events ---- //
+	virtual bool resize_event(const Vector2i& size) override;
+	virtual bool keyboard_event(int key, int scancode, int action, int modifiers) override;
 
-	virtual bool resize_event(const Vector2i& size) override {
-		nanogui::Screen::resize_event(size);
-		m_canvas->set_size(size);
-		return true;
-	}
+	void update();
 
-	virtual bool keyboard_event(int key, int scancode, int action, int modifiers) override {
-		if (Screen::keyboard_event(key, scancode, action, modifiers))
-			return true;
-		if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-			set_visible(false);
-			return true;
-		}
-		return false;
-	}
-
-	void update() {
-		double nextTime = glfwGetTime();
-		double dt = nextTime - lastTime;
-		m_canvas->update(dt);
-		lastTime = nextTime;
-		
-	}
-
-	virtual void draw(NVGcontext* ctx) {
-		update();
-		Screen::draw(ctx);
-	}
+	virtual void draw(NVGcontext* ctx) override;
 
 protected:
 	double lastTime;
-	ctpl::thread_pool pool;
 	MapCanvas* m_canvas;
 
+	ref<ConcurrencyManager> manager;
 	ref<MapInfo> uiInfo;
 	ref<MapForm> uiMap;
 	std::shared_ptr<World> world;
@@ -193,17 +123,18 @@ int main(int argc, char** argv)
 }
 
 TrafficApplication::TrafficApplication() : nanogui::Screen(
-	Vector2i(800, 600), "TrafficSim", true),
-	pool(12)
+	Vector2i(800, 600), "TrafficSim", true)
 {
 	using namespace nanogui;
-	auto map = initMap(pool);
-	world = std::make_shared<World>(map);
-	auto points = std::make_shared<std::vector<glm::vec2>>(generateMesh(*map));
+	manager = new ConcurrencyManager();
+
+	world = std::make_shared<World>(manager.get());
+	world->loadMap("warendorf.xmlmap");
+	auto points = std::make_shared<std::vector<glm::vec2>>(generateMesh(*world->getMap()));
 	auto colors = std::make_shared<std::vector<glm::vec3>>(points->size(), glm::vec3(1.0f, 1.0f, 1.0f));
 
 
-	m_canvas = new MapCanvas(this, map);
+	m_canvas = new MapCanvas(this, world->getMap());
 	m_canvas->set_layout(new FullscreenLayout());
 	m_canvas->setData(colors, points);
 	//m_canvas->setChunkData(chunks);
@@ -216,11 +147,50 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	// Applies the forms
 	m_canvas->setForm(uiMap);
 
-
 	perform_layout();
-	//uiMap->window()->set_position({10, 10});
-	//uiInfo->window()->set_position({ 10, 10 + uiMap->window()->height() });
-	//perform_layout();
 
+	// collects the initial time stamp for the main loop //
 	lastTime = glfwGetTime();
+}
+
+bool TrafficApplication::resize_event(const Vector2i& size)
+{
+	nanogui::Screen::resize_event(size);
+	m_canvas->set_size(size);
+	return true;
+}
+
+bool TrafficApplication::keyboard_event(int key, int scancode, int action, int modifiers)
+{
+	if (Screen::keyboard_event(key, scancode, action, modifiers))
+		return true;
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+		set_visible(false);
+		return true;
+	}
+	return false;
+}
+
+void TrafficApplication::update()
+{
+	double nextTime = glfwGetTime();
+	double dt = nextTime - lastTime;
+	m_canvas->update(dt);
+	lastTime = nextTime;
+
+}
+
+void TrafficApplication::draw(NVGcontext* ctx)
+{
+	update();
+	Screen::draw(ctx);
+}
+
+void FullscreenLayout::perform_layout(NVGcontext* ctx, nanogui::Widget* widget) const
+{
+}
+
+Vector2i FullscreenLayout::preferred_size(NVGcontext* ctx, const nanogui::Widget* widget) const
+{
+	return widget->parent()->size();
 }

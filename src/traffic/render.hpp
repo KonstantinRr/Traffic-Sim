@@ -35,23 +35,45 @@
 #include "osm_graph.h"
 
 
-namespace traffic {
-    //lt::resource::MeshBuilder2D convertToMesh(const OSMSegment &map);
+namespace traffic
+{
+    /// <summary> Defines the style how the latitude and longitude values are
+	/// mapped to an image that does not necessarily has the same aspect ratio.</summary>
     enum FitSize {
-		SCALE, FIT_WIDTH, FIT_HEIGHT
+		FIT_BOTH, // Fits the width and the height. May lead to distortion
+		FIT_WIDTH, // Fits the width and adapts the height.
+		FIT_HEIGHT // Fits the height and adapts the width.
 	};
 
 	struct RenderParams {
 		prec_t ratioLat, ratioLon, lowerLat, lowerLon;
 
+		/// <summary>Creates the render params using a bounding box, render style and
+		/// the image dimensions. </summary>
+		/// <param name="r">The bounding box that should later be rendered.</param>
+		/// <param name="fit">The render style</param>
+		/// <param name="width">The image dimension</param>
+		/// <param name="height">The image dimension</param>
 		RenderParams(const Rect &r, FitSize fit, size_t width, size_t height);
 		RenderParams(const OSMSegment &map, const lt::ImageRGB8 &image, FitSize fit);
 	};
 
-	void generateMap(const OSMSegment &map, const Rect &rect);
-	void renderMap(const OSMSegment &map, prec_t containerSize);
+	/// <summary>
+	/// Draws a route to an image. The render settings are specified by the RenderParams.
+	/// </summary>
+	/// <param name="map">The map that is used as lookup for the route IDs</param>
+	/// <param name="route">The route that is rendered on the page</param>
+	/// <param name="img">The image that is rendered on</param>
+	/// <param name="param">Additional render settings that specify the image boundaries</param>
 	void drawRoute(const OSMSegment& map, const Route& route, lt::ImageRGB8 &img, const RenderParams &param);
+
+	/// <summary>
+	/// Renders a complete map to an image. The render settings are specified by the RenderParams.
+	/// </summary>
+	/// <param name="map">The map that is rendered to the image</param>
+	/// <param name="img">The image the map is rendered on</param>
+	/// <param name="param">Additional render settings that specify the image boundaries</param>
 	void drawMap(const OSMSegment& map, lt::ImageRGB8 &img, const RenderParams &param);
-}
+} // trafficc
 
 #endif

@@ -31,25 +31,52 @@
 #include "engine.h"
 
 #include <glm/glm.hpp>
-
-#include "osm.h"
-#include "agent.h"
+#include <vector>
 
 namespace traffic
 {
-    double planeToLatitude(double planeLat, glm::dvec2 center);
-    double planeToLongitude(double planeLon, glm::dvec2 center);
-    double latitudeToPlane(double lat, glm::dvec2 center);
-    double longitudeToPlane(double lon, glm::dvec2 center);
+    // ---- Forward declarations ---- //
+    class OSMSegment;
+    class Word;
 
+    // ---- Plane to Sphere ---- //
+
+    /// <summary>Transforms a plane value to a sphere latitude value</summary>
+    /// <param name="planeLat">The plane value</param>
+    /// <param name="center">The center of the viewport that was used</param>
+    /// <returns>The original latitude in sphere coordinates</returns>
+    double planeToLatitude(double planeLat, glm::dvec2 center);
+    /// <summary>Transforms a plane value to a sphere longitude value</summary>
+    /// <param name="planeLon">The plane value</param>
+    /// <param name="center">The center of the viewport that was used</param>
+    /// <returns>The original longitude in sphere coordinates</returns>
+    double planeToLongitude(double planeLon, glm::dvec2 center);
+
+    glm::dvec2 planeToSphere(glm::dvec2 latLon, glm::dvec2 center);
+    glm::dvec2 planeToSphere(glm::dvec2 latLon);
     
+    // ---- Sphere to Plane ---- //
+
+    /// <summary>Transforms a latitude value to a plane value</summary>
+    /// <param name="lat">The latitude in sphere coordinates</param>
+    /// <param name="center">The center of the viewport</param>
+    /// <returns>A plane value that takes the distortion into account</returns>
+    double latitudeToPlane(double lat, glm::dvec2 center);
+    /// <summary>Transforms a longitude value to a plane value</summary>
+    /// <param name="lon">The longitude in sphere coordinates</param>
+    /// <param name="center">The center of the viewport</param>
+    /// <returns>A plane value that takes the distortion into account</returns>
+    double longitudeToPlane(double lon, glm::dvec2 center);
 
     glm::dvec2 sphereToPlane(glm::dvec2 latLon, glm::dvec2 center);
     glm::dvec2 sphereToPlane(glm::dvec2 latLon);
 
+    // ---- Mesh Generation ---- //
     std::vector<glm::vec2> generateMesh(const OSMSegment& map);
     std::vector<glm::vec2> generateChunkMesh(const World& world);
     void unify(std::vector<glm::vec2> &points);
+
+    // ---- Shaders ---- //
 
     const char * getLineVertex();
     const char * getLineFragment();

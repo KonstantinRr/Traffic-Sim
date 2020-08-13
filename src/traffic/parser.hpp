@@ -37,13 +37,18 @@
 
 class thread_pool;
 using taglist_t = std::vector<std::pair<std::string, std::string>>;
+
 namespace traffic
 {
+	/// <summary>
+	/// Stores the parser timings in a combined location
+	/// </summary>
 	struct ParseTimings
 	{
 		std::chrono::steady_clock::time_point
 			begin, endRead, endXMLParse, endDataParse, end;
 
+		/// <summary>Prints a detailed summary on the timings</summary>
 		void summary();
 	};
 

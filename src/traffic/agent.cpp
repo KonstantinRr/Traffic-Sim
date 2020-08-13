@@ -26,6 +26,8 @@
 #include "engine.h"
 
 #include "agent.h"
+#include "parser.hpp"
+#include <thread>
 
 using namespace traffic;
 using namespace glm;
@@ -101,47 +103,53 @@ bool contains(const std::vector<int64_t>& vector, int64_t id)
     return false;
 }
 
-traffic::WorldChunk::WorldChunk()
-{
-}
-
-traffic::WorldChunk::WorldChunk(const Rect& rect)
-    : boundingBox(rect)
-{
-}
-
-const std::vector<int64_t> traffic::WorldChunk::getNodes() const { return m_nodes; }
-const std::vector<int64_t> traffic::WorldChunk::getAgents() const { return m_agents; }
-bool traffic::WorldChunk::containtsNode(int64_t id) const { return contains(m_nodes, id); }
-bool traffic::WorldChunk::containsAgent(int64_t id) const { return contains(m_agents, id); }
-
-void traffic::WorldChunk::addNode(int64_t node) { m_nodes.push_back(node); }
-void traffic::WorldChunk::addAgent(int64_t agent) { m_agents.push_back(agent); }
-
-int traffic::WorldChunk::removeNode(int64_t node) { return eraseFast(m_nodes, node); }
-int traffic::WorldChunk::removeAgent(int64_t agent) { return eraseFast(m_agents, agent); }
-
-void traffic::WorldChunk::clearNodes() { m_nodes.clear(); }
-void traffic::WorldChunk::clearAgents() { m_agents.clear(); }
-
-void traffic::WorldChunk::clear()
-{
-    clearNodes();
-    clearAgents();
-}
-
-Rect traffic::WorldChunk::getBoundingBox() const { return boundingBox; }
-void traffic::WorldChunk::setBoundingBox(const Rect& rect) { this->boundingBox = rect; }
-
 // ---- Word ---- //
 
 
-traffic::World::World(const std::shared_ptr<OSMSegment>& map)
+traffic::World::World(ConcurrencyManager* manager)
 {
-    m_map = map;
+    m_manager = manager;
 }
 
+traffic::World::World(ConcurrencyManager* manager, const std::shared_ptr<OSMSegment>& map)
+{
+    m_map = map;
+    m_manager = manager;
+}
+
+void traffic::World::loadMap(const std::string& file)
+{
+    // Groningen coordinates
+    // tl,tr [53.265301,6.465842][53.265301,6.675939]
+    // br,bl [53.144829,6.675939][53.144829, 6.465842]	
+    //Rect initRect = Rect::fromBorders(53.144829, 53.265301, 6.465842, 6.675939);
+
+    // Warendorf coordinates
+    // tl,tr [51.9362,7.9553][51.9362,8.0259]
+    // br,bl [51.9782,8.0259][51.9362,7.9553]
+    Rect initRect = Rect::fromBorders(51.9362, 51.9782, 7.9553, 8.0259);
+
+    ParseTimings timings;
+    ParseArguments args;
+    args.file = file;
+    args.threads = 8;
+    args.pool = &m_manager->getPool();
+    args.timings = &timings;
+    m_map = std::make_shared<OSMSegment>(parseXMLMap(args));
+    timings.summary();
+    m_map->summary();
+}
+
+bool traffic::World::hasMap() const noexcept { return m_map.get(); }
 const std::shared_ptr<OSMSegment>& traffic::World::getMap() const { return m_map; }
 const std::shared_ptr<Graph>& World::getGraph() const { return m_graph; }
 const std::vector<Agent>& World::getAgents() const { return m_agents; }
 
+traffic::ConcurrencyManager::ConcurrencyManager()
+{
+    size_t size = std::thread::hardware_concurrency();
+    if (size == 0) size = 8;
+    m_pool.resize(size);
+}
+
+ctpl::thread_pool& traffic::ConcurrencyManager::getPool() { return m_pool; }

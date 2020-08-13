@@ -31,6 +31,7 @@
 #include "engine.h"
 
 #include <memory>
+#include <cptl.hpp>
 
 #include "osm.h"
 #include "osm_graph.h"
@@ -87,52 +88,34 @@ namespace traffic
         int64_t nextVisited;
     };
 
-    class WorldChunk
-    {
+    class ConcurrencyManager {
     public:
-        WorldChunk();
-        WorldChunk(const Rect &rect);
-
-        const std::vector<int64_t> getNodes() const;
-        const std::vector<int64_t> getAgents() const;
-
-        bool containtsNode(int64_t id) const;
-        bool containsAgent(int64_t id) const;
-
-        void addNode(int64_t node);
-        void addAgent(int64_t agent);
-
-        int removeNode(int64_t node);
-        int removeAgent(int64_t agent);
-
-        void clearNodes();
-        void clearAgents();
-        void clear();
-
-        Rect getBoundingBox() const;
-        void setBoundingBox(const Rect &rect);
+        ConcurrencyManager();
+        ctpl::thread_pool& getPool();
 
     protected:
-        Rect boundingBox;
-        std::vector<int64_t> m_nodes;
-        std::vector<int64_t> m_agents;
+        ctpl::thread_pool m_pool;
     };
 
 
-    class World
-    {
+    class World {
     public:
         // ---- Contstructors ---- //
-        World(const std::shared_ptr<OSMSegment> &map);
+        World(ConcurrencyManager *manager);
+        World(ConcurrencyManager* manager, const std::shared_ptr<OSMSegment> &map);
 
         // ---- Functions ---- //
+        bool hasMap() const noexcept;
+        
+        void loadMap(const std::string &file);
+        
         const std::shared_ptr<OSMSegment>& getMap() const;
         const std::shared_ptr<Graph>& getGraph() const;
         const std::vector<Agent>& getAgents() const;
-        const std::vector<WorldChunk>& getChunks() const { return {}; }
 
     protected:
         // ---- Member definitions ---- //
+        ConcurrencyManager *m_manager;
         std::shared_ptr<OSMSegment> m_map;
         std::shared_ptr<Graph> m_graph;
         std::vector<Agent> m_agents;

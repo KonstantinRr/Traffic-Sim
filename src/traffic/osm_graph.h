@@ -73,7 +73,6 @@ namespace traffic
 	};
 
 	/// <summary>
-	/// class GraphNode
 	/// Graph nodes are used in a graph representation to perform route optimization.
 	/// Each node has a certain set of connections that lead to other nodes creating
 	/// a connected graph.

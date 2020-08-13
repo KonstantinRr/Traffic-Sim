@@ -183,12 +183,11 @@ bool MapCanvas::mouse_button_event(
 bool MapCanvas::mouse_drag_event(
 	const Vector2i& p, const Vector2i& rel, int button, int modifiers) {
 	Canvas::mouse_drag_event(p, rel, button, modifiers);
-	printf("%d %d\n", button, modifiers);
 	if (button == 0b01)
 		applyTranslation(scaleWindowDistance(rel));
-	if (button == 0b11)
+	else if (button == 0b10)
 		applyZoom(rel.y());
-	if (button == 0b10)
+	else if (button == 0b11)
 		applyRotation(rel.y() * 0.01);
 	return true;
 }

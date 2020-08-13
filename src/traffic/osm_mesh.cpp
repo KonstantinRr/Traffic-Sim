@@ -30,6 +30,8 @@
 
 #include <glm/glm.hpp>
 
+#include "osm.h"
+#include "agent.h"
 #include "osm_mesh.h"
 #include "geom.h"
 
@@ -41,6 +43,8 @@ using namespace traffic;
 
 constexpr double Pi = 3.141592653589793238462643383279502;
 
+// ---- Plane to Sphere ---- //
+
 double traffic::planeToLatitude(double planeLat, dvec2 center)
 {
 	return planeLat / cos(center.y * Pi / 180.0);
@@ -50,6 +54,24 @@ double traffic::planeToLongitude(double planeLon, dvec2 center)
 {
 	return planeLon;
 }
+
+dvec2 traffic::planeToSphere(dvec2 latLon, dvec2 center)
+{
+	return dvec2(
+		planeToLatitude(latLon.x, center),
+		planeToLongitude(latLon.y, center)
+	);
+}
+
+dvec2 traffic::planeToSphere(dvec2 latLon)
+{
+	return dvec2(
+		planeToLatitude(latLon.x, latLon),
+		planeToLongitude(latLon.y, latLon)
+	);
+}
+
+// ---- Sphere to Plane ---- //
 
 double traffic::latitudeToPlane(double lat, dvec2 center)
 {
@@ -63,39 +85,42 @@ double traffic::longitudeToPlane(double lon, dvec2 center)
 
 dvec2 traffic::sphereToPlane(dvec2 latLon, dvec2 center) {
 	return dvec2(
-		latLon.x * cos(center.y * Pi / 180.0),
-		latLon.y
+		latitudeToPlane(latLon.x, center),
+		longitudeToPlane(latLon.y, center)
 	);
 }
 
-dvec2 traffic::sphereToPlane(dvec2 latLon)
-{
+dvec2 traffic::sphereToPlane(dvec2 latLon) {
 	return dvec2(
-		(float)(latLon.x * cos((double)latLon.y * Pi / 180.0)),
-		latLon.y
+		latitudeToPlane(latLon.x, latLon),
+		longitudeToPlane(latLon.y, latLon)
 	);
 }
 
+// ---- Mesh Generation ---- //
 
-std::vector<glm::vec2> traffic::generateMesh(const OSMSegment& map) {
+std::vector<vec2> traffic::generateMesh(const OSMSegment& map)
+{
 	auto& nodeList = *(map.getNodes());
-	std::vector<glm::vec2> points;
+	std::vector<vec2> points;
 
 	Point centerP = map.getBoundingBox().getCenter();
 	vec2 center(centerP.getLongitude(), centerP.getLatitude());
 
-	for (const OSMWay& wd : (*map.getWays())) {
+	for (const OSMWay& wd : (*map.getWays()))
+	{
 		auto& nds = wd.getNodes();
 		if (nds.empty()) continue;
 
 		int64_t lastNode = nds[0];
-		for (size_t i = 1; i < nds.size(); i++) {
+		for (size_t i = 1; i < nds.size(); i++)
+		{
 			size_t lastNodeID = map.getNodeIndex(lastNode);
 			size_t currentNodeID = map.getNodeIndex(nds[i]);
-			glm::vec2 pos1(
+			vec2 pos1(
 				static_cast<float>(nodeList[lastNodeID].getLon()),
 				static_cast<float>(nodeList[lastNodeID].getLat()));
-			glm::vec2 pos2(
+			vec2 pos2(
 				static_cast<float>(nodeList[currentNodeID].getLon()),
 				static_cast<float>(nodeList[currentNodeID].getLat()));
 
@@ -108,10 +133,11 @@ std::vector<glm::vec2> traffic::generateMesh(const OSMSegment& map) {
 	return points;
 }
 
-std::vector<glm::vec2> traffic::generateChunkMesh(const World& world)
+std::vector<vec2> traffic::generateChunkMesh(const World& world)
 {
-	std::vector<glm::vec2> positions;
-	glm::vec2 center = world.getMap()->getBoundingBox().getCenter().toVec();
+	std::vector<vec2> positions;
+	vec2 center = world.getMap()->getBoundingBox().getCenter().toVec();
+	/* // TODO
 	for (const WorldChunk& chunk : world.getChunks())
 	{
 		const Rect box = chunk.getBoundingBox();
@@ -128,10 +154,11 @@ std::vector<glm::vec2> traffic::generateChunkMesh(const World& world)
 		positions.push_back(sphereToPlane(box.latHlonH().toVec(), center));
 		positions.push_back(sphereToPlane(box.latLlonH().toVec(), center));
 	}
+	*/
 	return positions;
 }
 
-void traffic::unify(std::vector<glm::vec2>& points)
+void traffic::unify(std::vector<vec2>& points)
 {
 	float xMax = std::numeric_limits<float>::min();
 	float xMin = std::numeric_limits<float>::max();
@@ -146,7 +173,7 @@ void traffic::unify(std::vector<glm::vec2>& points)
 
 	float scale = std::max((xMax - xMin), (yMax - yMin));
 	for (size_t i = 0; i < points.size(); i++) {
-		points[i] += glm::vec2(-xMin, -yMin);
+		points[i] += vec2(-xMin, -yMin);
 		points[i] /= scale;
 	}
 }
@@ -154,7 +181,6 @@ void traffic::unify(std::vector<glm::vec2>& points)
 // ---- Shaders ---- //
 const char * lineVert = R"(
 #version 330
-
 #define MAT3 0
 
 #if MAT3
@@ -179,7 +205,7 @@ void main(void)
 	mixedColor = color;
 })";
 
-	// Fragment shader
+// Fragment shader
 const char * lineFragment = R"(
 #version 330
 in vec3 mixedColor;

@@ -30,13 +30,50 @@
 using namespace traffic;
 using namespace lt;
 
-void renderMap(const OSMSegment&, prec_t)
-{
+/// <summary>
+/// Renders a list of nodes on an image.
+/// </summary>
+/// <param name="map">The map that is used as lookup for the nodes</param>
+/// <param name="nds">The node IDs that are rendered</param>
+/// <param name="param">The render settings</param>
+/// <param name="img">The image that is rendered on</param>
+/// <param name="color">The color that is used to draw the line</param>
+void drawNodeList(
+	const OSMSegment& map,
+	const std::vector<int64_t>& nds,
+	const RenderParams& param,
+	ImageRGB8& img,
+	Color color
+) {
+	// does nothing if the list is empty
+	if (nds.empty()) return;
+
+	vector<OSMNode>& nodeList = *(map.getNodes());
+	int64_t lastNode = nds[0];
+	for (size_t i = 1; i < nds.size(); i++) {
+		size_t lastNodeID = map.getNodeIndex(lastNode);
+		size_t currentNodeID = map.getNodeIndex(nds[i]);
+		ImgPoint x1(
+			(int64_t)((nodeList[lastNodeID].getLon() - param.lowerLon) * param.ratioLon),
+			(int64_t)((nodeList[lastNodeID].getLat() - param.lowerLat) * param.ratioLat)
+		);
+		ImgPoint x2(
+			(int64_t)((nodeList[currentNodeID].getLon() - param.lowerLon) * param.ratioLon),
+			(int64_t)((nodeList[currentNodeID].getLat() - param.lowerLat) * param.ratioLat)
+		);
+		img.drawLine(
+			x1, x2,
+			color,
+			1, 1 // radius, accuracy
+		);
+		lastNode = nds[i];
+	}
 }
 
-// TODO implement random alpha colors
 
-RenderParams::RenderParams(const Rect &r, FitSize fit, size_t width, size_t height) {
+RenderParams::RenderParams(
+	const Rect &r, FitSize fit, size_t width, size_t height)
+{
 	// longitude x / latitude y
 	switch (fit) {
 		case FIT_WIDTH:
@@ -52,7 +89,7 @@ RenderParams::RenderParams(const Rect &r, FitSize fit, size_t width, size_t heig
 			lowerLon = r.lonCenter() - (width / 2) / ratioLon;
 			break;
 		default:
-		case SCALE:
+		case FIT_BOTH:
 			ratioLat = static_cast<prec_t>(height) / r.lonDistance();
 			ratioLon = static_cast<prec_t>(width) / r.lonDistance();
 			lowerLat = r.lowerLatBorder();
@@ -60,69 +97,28 @@ RenderParams::RenderParams(const Rect &r, FitSize fit, size_t width, size_t heig
 			break;
 	}
 }
-RenderParams::RenderParams(const OSMSegment &map, const ImageRGB8 &img, FitSize fit)
-	: RenderParams(map.getBoundingBox(), fit, img.getXExtent(), img.getYExtent()) {}
+RenderParams::RenderParams(
+	const OSMSegment &map, const ImageRGB8 &img, FitSize fit)
+	: RenderParams(
+		map.getBoundingBox(), fit,
+		img.getXExtent(), img.getYExtent()
+	) {}
 
-void drawNodeList(
-	const OSMSegment &map,
-	const std::vector<int64_t> &nds,
-	const RenderParams &param,
-	ImageRGB8 &img, 
-	Color color
-) {
-	int64_t uheight = static_cast<int64_t>(img.getYExtent());
-
-	if (nds.empty()) return;
-
-	vector<OSMNode>& nodeList = *(map.getNodes());
-	int64_t lastNode = nds[0];
-	for (size_t i = 1; i < nds.size(); i++) {
-		size_t lastNodeID = map.getNodeIndex(lastNode);
-		size_t currentNodeID = map.getNodeIndex(nds[i]);
-		ImgPoint x1(
-			(int64_t)((nodeList[lastNodeID].getLon() - param.lowerLon) * param.ratioLon),
-			(int64_t)((nodeList[lastNodeID].getLat() - param.lowerLat)* param.ratioLat)
-		);
-		ImgPoint x2(
-			(int64_t)((nodeList[currentNodeID].getLon() - param.lowerLon) * param.ratioLon),
-			(int64_t)((nodeList[currentNodeID].getLat() - param.lowerLat) * param.ratioLat)
-		);
-		img.drawLine(
-			x1, x2,
-			color,
-			1, 1 // radius, accuracy
-		);
-		lastNode = nds[i];
-	}
-}
 
 void traffic::drawRoute(
-	const OSMSegment &map,
-	const Route &route,
-	ImageRGB8 &img,
-	const RenderParams &param
-) {
+	const OSMSegment &map, const Route &route,
+	ImageRGB8 &img, const RenderParams &param)
+{
 	Color col(0.0, 0.0, 1.0, 1.0);
 	drawNodeList(map, route.nodes, param, img, col);
 }
 
 void traffic::drawMap(
-	const OSMSegment& map,
-	ImageRGB8 &img,
-	const RenderParams &param
-) {
-	if (map.hasNodes()) return;
-
-    bool debug = true;
-	if (debug) {
-		Rect r = map.getBoundingBox();
-		printf("Difference in lat: %f (max: %f, min: %f)",
-			r.latDistance(), r.upperLatBorder(), r.lowerLatBorder());
-		printf("Difference in lon: %f (max: %f, min: %f)",
-			r.lonDistance(), r.upperLonBorder(), r.lowerLonBorder());
-		printf("Scale ratio Lat: %f", param.ratioLat);
-		printf("Scale ratio Lon: %f", param.ratioLon);
-	}
+	const OSMSegment& map, ImageRGB8 &img,
+	const RenderParams &param)
+{
+	// does nothing if the map does not contain any nodes
+	if (!map.hasNodes()) return;
 
 	Color col(0.9, 0.9, 0.9, 1.0);
 	for (const OSMWay& wd : (*map.getWays())) {
