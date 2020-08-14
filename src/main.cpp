@@ -85,11 +85,11 @@ public:
 
 protected:
 	double lastTime;
-	ref<MapCanvas> m_canvas;
 
-	ref<ConcurrencyManager> manager;
-	ref<MapInfo> uiInfo;
-	ref<MapForm> uiMap;
+	ref<MapCanvas> m_canvas = nullptr;
+	ref<ConcurrencyManager> manager = nullptr;
+	ref<MapInfo> uiInfo = nullptr;
+	ref<MapForm> uiMap = nullptr;
 	std::shared_ptr<World> world;
 };
 
@@ -130,20 +130,17 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	manager = new ConcurrencyManager();
 
 	world = std::make_shared<World>(manager.get());
-	world->loadMap("maps/warendorf.xmlmap");
-	auto points = std::make_shared<std::vector<glm::vec2>>(generateMesh(*world->getMap()));
-	auto colors = std::make_shared<std::vector<glm::vec3>>(points->size(), glm::vec3(1.0f, 1.0f, 1.0f));
+	//world->loadMap("maps/warendorf.xmlmap");
 
 
 	m_canvas = new MapCanvas(this, world->getMap());
 	m_canvas->set_layout(new FullscreenLayout());
-	m_canvas->setData(colors, points);
-	//m_canvas->setChunkData(chunks);
+	//m_canvas->setChunkMesh(chunks);
 	m_canvas->setActive(true);
 	m_canvas->set_background_color({ 100, 100, 100, 255 });
 
 	uiMap = new MapForm(this, {10, 10}, m_canvas.get());
-	uiInfo = new MapInfo(this, {10, 340}, world.get());
+	uiInfo = new MapInfo(this, {10, 340}, world.get(), m_canvas.get());
 
 	// Applies the forms
 	m_canvas->setForm(uiMap);
