@@ -43,14 +43,22 @@ MapCanvas::MapCanvas(Widget* parent, std::shared_ptr<OSMSegment> map, MapForm* f
 	resetView();
 
 	// Defines the used shaders
-	m_chunk_shader = new Shader(
-		render_pass(), "shader_chunk",
-		getChunkVertex(), getChunkFragment()
-	);
-	m_shader = new Shader(
-		render_pass(), "shader_map",
-		getLineVertex(), getLineFragment()
-	);
+	try {
+		/*
+		m_chunk_shader = new Shader(
+			render_pass(), "shader_chunk",
+			getChunkVertex(), getChunkFragment()
+		);
+		*/
+		m_shader = new Shader(
+			render_pass(), "shader_map",
+			getLineVertex(), getLineFragment()
+		);
+		m_success = false;
+	} catch (const std::exception &e) {
+		printf("%s\n", e.what());
+		m_success = false;
+	}
 }
 
 Vector2d MapCanvas::scaleWindowDistance(Vector2i vec) {
@@ -87,9 +95,10 @@ void MapCanvas::resetView()
 {
 	auto centerPoint = sphereToPlane(
 		map->getBoundingBox().getCenter().toVec());
-	position = { (float)centerPoint.x, (float)centerPoint.y };
-	m_zoom = 25.0f;
-	m_rotation = 0.0f;
+	position = { centerPoint.x, centerPoint.y };
+	cursor = { 0.0, 0.0 };
+	m_zoom = 25.0;
+	m_rotation = 0.0;
 	refreshView();
 }
 
@@ -211,19 +220,23 @@ bool MapCanvas::scroll_event(const Vector2i& p, const Vector2f& rel)
 void MapCanvas::setData(std::shared_ptr<std::vector<glm::vec3>> colors, std::shared_ptr<std::vector<glm::vec2>> points)
 {
 	using namespace nanogui;
-	pointsSize = points->size();
-	m_shader->set_buffer("vVertex", VariableType::Float32,
-		{ points->size(), 2 }, points->data());
-	m_shader->set_buffer("color", VariableType::Float32,
-		{ colors->size(), 3 }, colors->data());
+	if (m_success) {
+		pointsSize = points->size();
+		m_shader->set_buffer("vVertex", VariableType::Float32,
+			{ points->size(), 2 }, points->data());
+		m_shader->set_buffer("color", VariableType::Float32,
+			{ colors->size(), 3 }, colors->data());
+	}
 }
 
 void MapCanvas::setChunkData(std::shared_ptr<std::vector<glm::vec2>> points)
 {
 	using namespace nanogui;
-	chunksSize = points->size();
-	m_chunk_shader->set_buffer("vVertex", VariableType::Float32,
-		{ points->size(), 2 }, points->data());
+	if (m_success) {
+		chunksSize = points->size();
+		m_chunk_shader->set_buffer("vVertex", VariableType::Float32,
+			{ points->size(), 2 }, points->data());
+	}
 }
 
 void MapCanvas::setActive(bool active)
@@ -302,7 +315,7 @@ Matrix4f MapCanvas::createTransform4D() const {
 void MapCanvas::draw_contents()
 {
 	using namespace nanogui;
-	if (m_active) {
+	if (m_active && m_success) {
 		auto transform = createTransform4D();
 	
 		// Chunk rendering
@@ -357,6 +370,7 @@ MapForm::MapForm(nanogui::Screen* parent, Vector2i pos, MapCanvas* canvas) : For
 	m_canvas = canvas;
 	set_fixed_size(Vector2i(100, 20));
 	m_window = add_window(pos, "Position panel");
+
 	add_group("Position");
 	add_variable<double>("Latitude",
 		[this](double value) { if (this->m_canvas) this->m_canvas->setLatitude(value); },
@@ -371,7 +385,7 @@ MapForm::MapForm(nanogui::Screen* parent, Vector2i pos, MapCanvas* canvas) : For
 		[this](double value) { if (m_canvas) m_canvas->setRotation(radians(std::fmod(value, 360.0))); },
 		[this]() { return m_canvas ? std::fmod(degrees(m_canvas->getRotation()), 360.0) : 0.0; });
 	add_button("Reset View", [this] { if (m_canvas) m_canvas->resetView(); });
-
+	
 	add_group("Cursor");
 	add_variable<double>("Latitude",
 		[this](double value) {},
@@ -379,8 +393,6 @@ MapForm::MapForm(nanogui::Screen* parent, Vector2i pos, MapCanvas* canvas) : For
 	add_variable<double>("Longitude",
 		[this](double val) {},
 		[this]() { return m_canvas ? m_canvas->getCursorLongitude() : 0.0; }, false);
-
-
 }
 
 MapCanvas* MapForm::getCanvas() const noexcept
@@ -399,7 +411,7 @@ MapInfo::MapInfo(nanogui::Screen* parent, Vector2i pos, traffic::World* world) :
 	m_window = add_window(pos, "Position panel");
 	m_world = world;
 
-	bool addBounds = true;
+	bool addBounds = false;
 	bool addGeneralInfo = true;
 
 	if (addBounds) {

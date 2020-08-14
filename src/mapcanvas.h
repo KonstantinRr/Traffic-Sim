@@ -114,7 +114,7 @@ protected:
 
 	std::shared_ptr<traffic::OSMSegment> map;
 	size_t pointsSize, chunksSize;
-	bool m_active;
+	bool m_active, m_success;
 	bool m_render_chunk;
 	bool m_mark_update = false;
 	bool m_update_view = true;

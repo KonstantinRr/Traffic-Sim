@@ -85,7 +85,7 @@ public:
 
 protected:
 	double lastTime;
-	MapCanvas* m_canvas;
+	ref<MapCanvas> m_canvas;
 
 	ref<ConcurrencyManager> manager;
 	ref<MapInfo> uiInfo;
@@ -125,11 +125,12 @@ int main(int argc, char** argv)
 TrafficApplication::TrafficApplication() : nanogui::Screen(
 	Vector2i(800, 600), "TrafficSim", true)
 {
+
 	using namespace nanogui;
 	manager = new ConcurrencyManager();
 
 	world = std::make_shared<World>(manager.get());
-	world->loadMap("warendorf.xmlmap");
+	world->loadMap("maps/warendorf.xmlmap");
 	auto points = std::make_shared<std::vector<glm::vec2>>(generateMesh(*world->getMap()));
 	auto colors = std::make_shared<std::vector<glm::vec3>>(points->size(), glm::vec3(1.0f, 1.0f, 1.0f));
 
@@ -141,7 +142,7 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	m_canvas->setActive(true);
 	m_canvas->set_background_color({ 100, 100, 100, 255 });
 
-	uiMap = new MapForm(this, {10, 10}, m_canvas);
+	uiMap = new MapForm(this, {10, 10}, m_canvas.get());
 	uiInfo = new MapInfo(this, {10, 340}, world.get());
 
 	// Applies the forms

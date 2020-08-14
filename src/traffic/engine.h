@@ -29,7 +29,11 @@
 #ifndef ENGINE_H
 #define ENGINE_H
 
-#define SPDLOG_FMT_EXTERNAL
+#ifndef SPDLOG_FMT_EXTERNAL
+#	define SPDLOG_FMT_EXTERNAL
+#endif
+
+#define NANOGUI_USE_OPENGL
 #define _CRT_SECURE_NO_WARNINGS 1
 
 #if defined(_WIN32)

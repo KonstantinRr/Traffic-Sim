@@ -45,7 +45,7 @@ namespace traffic
 	/// </summary>
 	struct ParseTimings
 	{
-		std::chrono::steady_clock::time_point
+		std::chrono::high_resolution_clock::time_point
 			begin, endRead, endXMLParse, endDataParse, end;
 
 		/// <summary>Prints a detailed summary on the timings</summary>
