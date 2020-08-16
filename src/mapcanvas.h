@@ -126,6 +126,61 @@ protected:
 	nanogui::ref<nanogui::Window> m_window = nullptr;
 };
 
+class MapDialogPath : public nanogui::FormHelper {
+public:
+	MapDialogPath(nanogui::Screen *parent, Vector2i pos,
+		MapCanvas *canvas = nullptr);
+
+	void clear();
+
+protected:
+	MapCanvas* m_canvas = nullptr;
+	nanogui::ref<nanogui::Window> m_window = nullptr;
+
+	Vector2d m_start;
+	Vector2d m_stop;
+};
+
+class MapDetail : public nanogui::Widget {
+public:
+	MapDetail(nanogui::Widget *parent);
+
+protected:
+	ref<nanogui::TextBox> m_box = nullptr;
+};
+
+template<typename Type>
+struct CallbackForm {
+	int32_t id;
+	std::function<Type> function;
+
+	template<typename Param>
+	CallbackForm(int32_t id, const Param & func)
+		: id(id), function(func) { }
+};
+
+template<typename Type>
+struct CallbackReturn {
+	int32_t id;
+	std::vector<CallbackForm<Type>> *parent;
+
+	CallbackReturn(int32_t id, std::vector<CallbackForm<Type>>* parent)
+		: id(id), parent(parent) { }
+
+	bool isActive() const { return id != -1; }
+	void remove() {
+		id = -1;
+		for (size_t i = 0; i < parent->size();) {
+			if ((*parent)[i].id == id) {
+				parent->erase(parent->begin() + i);
+			}
+			else {
+				i++;
+			}
+		}
+	}
+};
+
 /// <summary>
 /// A canvas that is used to render a map to the screen. This canvas uses its own
 /// OpenGL shaders to render a mesh of the map dynamically on the screen. It offers
@@ -199,6 +254,25 @@ public:
 	Matrix4f createTransform4D() const;
 
 	void setActive(bool active);
+	
+	template<typename Type>
+	CallbackReturn<void(Vector2d)> addCallbackLeftClick(const Type& function) {
+		m_cb_leftclick.push_back(std::function<void(Vector2d)>(function));
+	}
+
+	template<typename Type>
+	CallbackReturn<void(Vector2d)> addCallbackRightClick(const Type& function) {
+		m_cb_rightclick.push_back(
+			CallbackForm<void(Vector2d)>(
+				m_cb_rightclick.empty() ? 0 : m_cb_rightclick.back().id + 1,
+				std::function<void(Vector2d)>(function)
+			)
+		);
+	}
+
+	void clearCallbacks();
+	void clearCallbacksLeftClick();
+	void clearCallbacksRightClick();
 
 protected:
 	// ---- Mesh access ---- //
@@ -213,6 +287,10 @@ protected:
 		const std::vector<glm::vec2>& points);
 
 	// ---- Member variables ---- //
+
+	std::vector<CallbackForm<void(Vector2d)>> m_cb_leftclick;
+	std::vector<CallbackForm<void(Vector2d)>> m_cb_rightclick;
+
 	nanogui::ref<nanogui::Shader> m_shader;
 	nanogui::ref<nanogui::Shader> m_chunk_shader;
 	MapForm* m_form;
@@ -234,3 +312,4 @@ protected:
 	double m_min_zoom;
 
 };
+

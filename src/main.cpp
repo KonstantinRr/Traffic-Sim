@@ -90,6 +90,7 @@ protected:
 	ref<ConcurrencyManager> manager = nullptr;
 	ref<MapInfo> uiInfo = nullptr;
 	ref<MapForm> uiMap = nullptr;
+	ref<MapDialogPath> uiPath = nullptr;
 	std::shared_ptr<World> world;
 };
 
@@ -130,22 +131,27 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	manager = new ConcurrencyManager();
 
 	world = std::make_shared<World>(manager.get());
-	//world->loadMap("maps/warendorf.xmlmap");
 
 
 	m_canvas = new MapCanvas(this, world->getMap());
 	m_canvas->set_layout(new FullscreenLayout());
-	//m_canvas->setChunkMesh(chunks);
 	m_canvas->setActive(true);
 	m_canvas->set_background_color({ 100, 100, 100, 255 });
 
 	uiMap = new MapForm(this, {10, 10}, m_canvas.get());
 	uiInfo = new MapInfo(this, {10, 340}, world.get(), m_canvas.get());
-
+	uiPath = new MapDialogPath(this, {10, 10}, m_canvas.get());
 	// Applies the forms
 	m_canvas->setForm(uiMap);
 
 	perform_layout();
+
+	// Loads the default map
+	bool loadDefault = true;
+	if (loadDefault) {
+		world->loadMap("maps/warendorf.xmlmap");
+		m_canvas->loadMap(world->getMap());
+	}
 
 	// collects the initial time stamp for the main loop //
 	lastTime = glfwGetTime();

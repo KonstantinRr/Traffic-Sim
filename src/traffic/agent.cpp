@@ -31,6 +31,7 @@
 
 using namespace traffic;
 using namespace glm;
+using namespace std;
 
 // ---- Entity ---- //
 
@@ -113,8 +114,14 @@ traffic::World::World(ConcurrencyManager* manager)
 
 traffic::World::World(ConcurrencyManager* manager, const std::shared_ptr<OSMSegment>& map)
 {
-    m_map = map;
     m_manager = manager;
+    loadMap(map);
+}
+
+void traffic::World::loadMap(const std::shared_ptr<OSMSegment>& map)
+{
+    m_map = map;
+    m_graph = make_shared<Graph>(m_map);
 }
 
 void traffic::World::loadMap(const std::string& file)
@@ -135,9 +142,11 @@ void traffic::World::loadMap(const std::string& file)
     args.threads = 8;
     args.pool = &m_manager->getPool();
     args.timings = &timings;
-    m_map = std::make_shared<OSMSegment>(parseXMLMap(args));
+    auto newMap = std::make_shared<OSMSegment>(parseXMLMap(args));
     timings.summary();
-    m_map->summary();
+    newMap->summary();
+
+    loadMap(newMap);
 }
 
 bool traffic::World::hasMap() const noexcept { return m_map.get(); }

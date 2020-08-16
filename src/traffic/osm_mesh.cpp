@@ -99,35 +99,37 @@ dvec2 traffic::sphereToPlane(dvec2 latLon) {
 
 // ---- Mesh Generation ---- //
 
-std::vector<vec2> traffic::generateMesh(const OSMSegment& map)
+void applyNodes(const std::vector<int64_t> nds, const OSMSegment& map,
+	std::vector<glm::vec2> &points)
 {
-	auto& nodeList = *(map.getNodes());
-	std::vector<vec2> points;
-
+	if (nds.empty()) return;
 	Point centerP = map.getBoundingBox().getCenter();
 	vec2 center(centerP.getLongitude(), centerP.getLatitude());
+	auto& nodeList = *(map.getNodes());
 
-	for (const OSMWay& wd : (*map.getWays()))
+	int64_t lastNode = nds[0];
+	for (size_t i = 1; i < nds.size(); i++)
 	{
-		auto& nds = wd.getNodes();
-		if (nds.empty()) continue;
+		size_t lastNodeID = map.getNodeIndex(lastNode);
+		size_t currentNodeID = map.getNodeIndex(nds[i]);
+		vec2 pos1(
+			static_cast<float>(nodeList[lastNodeID].getLon()),
+			static_cast<float>(nodeList[lastNodeID].getLat()));
+		vec2 pos2(
+			static_cast<float>(nodeList[currentNodeID].getLon()),
+			static_cast<float>(nodeList[currentNodeID].getLat()));
 
-		int64_t lastNode = nds[0];
-		for (size_t i = 1; i < nds.size(); i++)
-		{
-			size_t lastNodeID = map.getNodeIndex(lastNode);
-			size_t currentNodeID = map.getNodeIndex(nds[i]);
-			vec2 pos1(
-				static_cast<float>(nodeList[lastNodeID].getLon()),
-				static_cast<float>(nodeList[lastNodeID].getLat()));
-			vec2 pos2(
-				static_cast<float>(nodeList[currentNodeID].getLon()),
-				static_cast<float>(nodeList[currentNodeID].getLat()));
+		points.push_back(sphereToPlane(pos1, center));
+		points.push_back(sphereToPlane(pos2, center));
+		lastNode = nds[i];
+	}
+}
 
-			points.push_back(sphereToPlane(pos1, center));
-			points.push_back(sphereToPlane(pos2, center));
-			lastNode = nds[i];
-		}
+std::vector<vec2> traffic::generateMesh(const OSMSegment& map)
+{
+	std::vector<vec2> points;
+	for (const OSMWay& wd : (*map.getWays())) {
+		applyNodes(wd.getNodes(), map, points);
 	}
 
 	return points;
@@ -156,6 +158,13 @@ std::vector<vec2> traffic::generateChunkMesh(const World& world)
 	}
 	*/
 	return positions;
+}
+
+std::vector<glm::vec2> traffic::generateRouteMesh(const Route route, const OSMSegment& map)
+{
+	std::vector<glm::vec2> points(route.nodes.size());
+	applyNodes(route.nodes, map, points);
+	return points;
 }
 
 void traffic::unify(std::vector<vec2>& points)

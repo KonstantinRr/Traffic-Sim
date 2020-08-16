@@ -208,9 +208,11 @@ void MapCanvas::refreshView()
 
 void MapCanvas::loadMap(std::shared_ptr<traffic::OSMSegment> map)
 {
-	m_map = map;
-	genMesh();
-	resetView();
+	if (map) {
+		m_map = map;
+		genMesh();
+		resetView();
+	}
 }
 
 bool MapCanvas::hasMap() const { return m_map.get(); }
@@ -219,7 +221,16 @@ void MapCanvas::setForm(MapForm* form) { m_form = form; }
 
 bool MapCanvas::mouse_button_event(
 	const Vector2i& p, int button, bool down, int modifiers) {
-	return Canvas::mouse_button_event(p, button, down, modifiers);
+	Canvas::mouse_button_event(p, button, down, modifiers);
+	Vector2d position = inverseTransform(transformWindow(p));
+	if (button == GLFW_MOUSE_BUTTON_1) {
+		for (const auto & cb : m_cb_leftclick)
+			cb(position);
+	}
+	else if (button == GLFW_MOUSE_BUTTON_2) {
+		for (const auto & cb : m_cb_rightclick)
+			cb(position);
+	}
 }
 
 bool MapCanvas::mouse_drag_event(
@@ -309,6 +320,15 @@ void MapCanvas::update(double dt)
 		m_mark_update = false;
 	}
 }
+
+void MapCanvas::clearCallbacks()
+{
+	clearCallbacksLeftClick();
+	clearCallbacksRightClick();
+}
+
+void MapCanvas::clearCallbacksLeftClick() { m_cb_leftclick.clear(); }
+void MapCanvas::clearCallbacksRightClick() { m_cb_rightclick.clear(); }
 
 void MapCanvas::genMesh()
 {
@@ -509,3 +529,34 @@ void MapInfo::setWorld(traffic::World* world) noexcept
 MapCanvas* MapInfo::getCanvas() const noexcept { return m_canvas; }
 
 void MapInfo::setCanvas(MapCanvas* canvas) { m_canvas = canvas; }
+
+MapDialogPath::MapDialogPath(nanogui::Screen* parent, Vector2i pos, MapCanvas* canvas)
+	: nanogui::FormHelper(parent)
+{
+	clear();
+
+	set_fixed_size(Vector2i(100, 20));
+	m_window = add_window(pos, "Position panel");
+	m_canvas = canvas;
+
+	add_group("Start");
+	add_variable<double>("Latitude", m_start.x());
+	add_variable<double>("Longitude", m_start.y());
+	add_group("End");
+	add_variable<double>("Latitude", m_stop.x());
+	add_variable<double>("Longitude", m_stop.y());
+	add_button("Calculate Path", [this](){});
+}
+
+void MapDialogPath::clear()
+{
+	m_start = { 0.0, 0.0 };
+	m_stop = { 0.0, 0.0 };
+}
+
+
+MapDetail::MapDetail(nanogui::Widget* parent) : nanogui::Widget(parent)
+{
+	m_box = new nanogui::TextBox(this, "Hello World");
+	add_child(m_box);
+}

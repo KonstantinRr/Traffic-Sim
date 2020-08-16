@@ -30,6 +30,8 @@
 
 #include "engine.h"
 
+
+
 #include <glm/glm.hpp>
 #include <vector>
 
@@ -38,6 +40,7 @@ namespace traffic
     // ---- Forward declarations ---- //
     class OSMSegment;
     class Word;
+    class Route;
 
     // ---- Plane to Sphere ---- //
 
@@ -74,6 +77,8 @@ namespace traffic
     // ---- Mesh Generation ---- //
     std::vector<glm::vec2> generateMesh(const OSMSegment& map);
     std::vector<glm::vec2> generateChunkMesh(const World& world);
+    std::vector<glm::vec2> generateRouteMesh(const Route route, const OSMSegment &map);
+
     void unify(std::vector<glm::vec2> &points);
 
     // ---- Shaders ---- //

@@ -107,6 +107,7 @@ namespace traffic
         // ---- Functions ---- //
         bool hasMap() const noexcept;
         
+        void loadMap(const std::shared_ptr<OSMSegment>& map);
         void loadMap(const std::string &file);
         
         const std::shared_ptr<OSMSegment>& getMap() const;
