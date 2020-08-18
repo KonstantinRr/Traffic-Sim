@@ -37,8 +37,10 @@
 
 #define RAPIDXML_DYNAMIC_POOL_SIZE 4 * 64 * 1024 * 1024
 
-#include "rapidxml/rapidxml.hpp"
-#include "rapidxml/rapidxml_print.hpp"
+#include <rapidxml/rapidxml.hpp>
+#include <rapidxml/rapidxml_print.hpp>
+
+#include <fmt/format.h>
 #include <cptl.hpp>
 
 #include "parser.hpp"
@@ -536,13 +538,15 @@ OSMSegment traffic::parseXMLMap(const ParseArguments &args)
 
 void traffic::ParseTimings::summary()
 {
-	printf("Read file into memory. Took %dms total %dms\n",
+	string f1 = fmt::format("Read file into memory. Took {}ms total {}ms",
 		duration_cast<milliseconds>(endRead - begin).count(),
 		duration_cast<milliseconds>(endRead - begin).count());
-	printf("Parsed XML file, Took %dms, Total %dms\n",
+	string f2 = fmt::format("Parsed XML file, Took {}ms, Total {}ms",
 		duration_cast<milliseconds>(endXMLParse - endRead).count(),
 		duration_cast<milliseconds>(endXMLParse - begin).count());
-	printf("Parsed ways and nodes. Took %dms, Total %dms\n",
+	string f3 = fmt::format("Parsed ways and nodes. Took {}ms, Total {}ms",
 		duration_cast<milliseconds>(endDataParse - endXMLParse).count(),
 		duration_cast<milliseconds>(endDataParse - begin).count());
+
+	cout << f1 << endl << f2 << endl << f3 << endl;
 }

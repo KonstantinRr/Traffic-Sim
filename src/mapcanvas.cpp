@@ -71,21 +71,21 @@ MapCanvas::MapCanvas(Widget* parent,
 	m_min_zoom = 2.0;
 	m_max_zoom = 1000.0;
 
-	loadMap(world);
+	if (world) loadMap(world);
+	else resetView();
 
 	try {
 		// Defines the used shaders
+		
 		m_chunk_shader = new Shader(
 			render_pass(), "shader_chunk",
-			getChunkVertex(), getChunkFragment()
-		);
+			getChunkVertex(), getChunkFragment());
 		m_shader = new Shader(
 			render_pass(), "shader_map",
-			getLineVertex(), getLineFragment()
-		);
+			getLineVertex(), getLineFragment());
 		m_success = true;
-	} catch (const std::exception &e) {
-		printf("%s\n", e.what());
+	} catch ( ... ) {
+		//printf("%s\n", e.what());
 		m_success = false;
 	}
 }
@@ -166,25 +166,10 @@ void MapCanvas::setRotation(double rotation)
 	refreshView();
 }
 
-double MapCanvas::getLatitude() const
-{
-	return planeToLatitude(position.x(), toGLM(getCenter()));
-}
-
-double MapCanvas::getLongitude() const
-{
-	return planeToLongitude(position.y(), toGLM(getCenter()));
-}
-
-double MapCanvas::getCursorLatitude() const
-{
-	return planeToLatitude(cursor.x(), toGLM(getCenter()));
-}
-
-double MapCanvas::getCursorLongitude() const
-{
-	return planeToLongitude(cursor.y(), toGLM(getCenter()));
-}
+double MapCanvas::getLatitude() const { return planeToLatitude(position.x(), toGLM(getCenter())); }
+double MapCanvas::getLongitude() const { return planeToLongitude(position.y(), toGLM(getCenter())); }
+double MapCanvas::getCursorLatitude() const { return planeToLatitude(cursor.x(), toGLM(getCenter())); }
+double MapCanvas::getCursorLongitude() const { return planeToLongitude(cursor.y(), toGLM(getCenter())); }
 
 double MapCanvas::getZoom() const { return m_zoom; }
 double MapCanvas::getRotation() const { return m_rotation; }
@@ -224,13 +209,16 @@ bool MapCanvas::mouse_button_event(
 	Canvas::mouse_button_event(p, button, down, modifiers);
 	Vector2d position = inverseTransform(transformWindow(p));
 	if (button == GLFW_MOUSE_BUTTON_1) {
-		for (const auto & cb : m_cb_leftclick)
-			cb(position);
+		//for (auto & cb : m_cb_leftclick)
+		//	cb.function(position);
+		return true;
 	}
 	else if (button == GLFW_MOUSE_BUTTON_2) {
-		for (const auto & cb : m_cb_rightclick)
-			cb(position);
+		//for (auto & cb : m_cb_rightclick)
+		//	cb.function(position);
+		return true;
 	}
+	return false;
 }
 
 bool MapCanvas::mouse_drag_event(

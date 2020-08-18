@@ -102,7 +102,7 @@ int main(int argc, char** argv)
 		nanogui::init();
 		{
 			nanogui::ref<TrafficApplication> app = new TrafficApplication();
-			app->draw_all();
+			//app->draw_all();
 			app->set_visible(true);
 			nanogui::mainloop((float)(1.0 / 60.0 * 1000.0));
 		}
@@ -147,7 +147,7 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	perform_layout();
 
 	// Loads the default map
-	bool loadDefault = true;
+	bool loadDefault = false;
 	if (loadDefault) {
 		world->loadMap("maps/warendorf.xmlmap");
 		m_canvas->loadMap(world->getMap());

@@ -155,7 +155,7 @@ struct CallbackForm {
 	std::function<Type> function;
 
 	template<typename Param>
-	CallbackForm(int32_t id, const Param & func)
+	CallbackForm(int32_t id, Param && func)
 		: id(id), function(func) { }
 };
 
@@ -255,9 +255,15 @@ public:
 
 	void setActive(bool active);
 	
+	/*
 	template<typename Type>
 	CallbackReturn<void(Vector2d)> addCallbackLeftClick(const Type& function) {
-		m_cb_leftclick.push_back(std::function<void(Vector2d)>(function));
+		m_cb_leftclick.push_back(
+			CallbackForm<void(Vector2d)>(
+				m_cb_leftclick.empty() ? 0 : m_cb_leftclick.back().id + 1,
+				std::function<void(Vector2d)>(function)
+			)
+		);
 	}
 
 	template<typename Type>
@@ -269,6 +275,7 @@ public:
 			)
 		);
 	}
+	*/
 
 	void clearCallbacks();
 	void clearCallbacksLeftClick();
