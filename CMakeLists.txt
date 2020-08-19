@@ -44,6 +44,7 @@ set(SOURCE
 # All header files in this project
 set(HEADERS
    ${CMAKE_CURRENT_SOURCE_DIR}/src/mapcanvas.h
+   ${CMAKE_CURRENT_SOURCE_DIR}/src/listener.h
    ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/agent.h
    ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/engine.h
    ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/geom.h

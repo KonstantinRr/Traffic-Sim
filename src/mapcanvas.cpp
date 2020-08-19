@@ -23,6 +23,7 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
+#include "traffic/engine.h"
 
 #include "mapcanvas.h"
 
@@ -59,24 +60,22 @@ nanogui::Matrix2f toView(const glm::mat2& value)
 // ---- MapCanvas ---- //
 
 MapCanvas::MapCanvas(Widget* parent,
-	std::shared_ptr<OSMSegment> world, MapForm* form) : Canvas(parent, 1)
+	std::shared_ptr<OSMSegment> world) : Canvas(parent, 1)
 {
 	m_active = false;
 	m_render_chunk = false;
 	m_mark_update = false;
 	m_update_view = true;
 
-	m_form = form;
-
 	m_min_zoom = 2.0;
 	m_max_zoom = 1000.0;
 
+	// loadMap includes resetView
 	if (world) loadMap(world);
 	else resetView();
 
 	try {
 		// Defines the used shaders
-		
 		m_chunk_shader = new Shader(
 			render_pass(), "shader_chunk",
 			getChunkVertex(), getChunkFragment());
@@ -96,15 +95,22 @@ Vector2d MapCanvas::scaleWindowDistance(Vector2i vec) {
 		-vec.y() * 2.0 / width());
 }
 
-Vector2d MapCanvas::transformWindow(Vector2i vec) {
+Vector2d MapCanvas::forwardTransformWindow(Vector2i vec) {
 	return Vector2d(
 		vec.x() * 2.0 / width() - 1.0,
 		(height() - vec.y()) * 2.0 / height() - 1.0);
 }
+Vector2i MapCanvas::inverseTransformWindow(Vector2d vec) {
+	return Vector2i(
+		(int32_t)((vec.x() + 1.0) / 2.0 * width()),
+		-((int32_t)((vec.y() + 1.0) / 2.0 * height()) - height())
+	);
+}
 
 void MapCanvas::applyTranslation(Vector2d rel)
 {
-	setPosition(position - toView(glm::rotate(toGLM(rel / m_zoom), -m_rotation)));
+	Vector2d mx = toView(glm::rotate(toGLM(rel / m_zoom), -m_rotation));
+	setPosition(position - mx);
 }
 
 void MapCanvas::applyZoom(double iterations)
@@ -126,50 +132,62 @@ void MapCanvas::resetView()
 	cursor = { 0.0, 0.0 };
 	m_zoom = 25.0;
 	m_rotation = 0.0;
-	refreshView();
+
+	triggerCallbackMapMoved();
+	triggerCallbackCursorMoved();
+	triggerCallbackRotationChanged();
+	triggerCallbackZoomChanged();
 }
 
 void MapCanvas::setLatitude(double lat)
 {
-	position.x() = latitudeToPlane(lat, toGLM(getCenter()));
-	refreshView();
+	setPosition(Vector2d(
+		latitudeToPlane(lat, toGLM(getCenter())),
+		position.y()));
 }
 
 void MapCanvas::setLongitude(double lon)
 {
-	position.y() = longitudeToPlane(lon, toGLM(getCenter()));
-	refreshView();
+	setPosition(Vector2d(
+		position.x(),
+		longitudeToPlane(lon, toGLM(getCenter()))));
 }
 
 void MapCanvas::setLatLon(double lat, double lon)
 {
-	setLatitude(lat);
-	setLongitude(lon);
-	refreshView();
+	setPosition(Vector2d(
+		latitudeToPlane(lat, toGLM(getCenter())),
+		longitudeToPlane(lon, toGLM(getCenter()))));
 }
 
 void MapCanvas::setPosition(Vector2d pos)
 {
 	position = pos;
-	refreshView();
+	triggerCallbackMapMoved();
+	triggerCallbackViewChanged();
 }
 
 void MapCanvas::setZoom(double zoom)
 {
 	m_zoom = zoom;
-	refreshView();
+	triggerCallbackZoomChanged();
+	triggerCallbackViewChanged();
 }
 
 void MapCanvas::setRotation(double rotation)
 {
 	m_rotation = rotation;
-	refreshView();
+	triggerCallbackRotationChanged();
 }
 
 double MapCanvas::getLatitude() const { return planeToLatitude(position.x(), toGLM(getCenter())); }
 double MapCanvas::getLongitude() const { return planeToLongitude(position.y(), toGLM(getCenter())); }
 double MapCanvas::getCursorLatitude() const { return planeToLatitude(cursor.x(), toGLM(getCenter())); }
 double MapCanvas::getCursorLongitude() const { return planeToLongitude(cursor.y(), toGLM(getCenter())); }
+Vector2d MapCanvas::getCursor() const { return Vector2d(getCursorLatitude(), getCursorLongitude()); }
+Vector2d MapCanvas::getPosition() const { return Vector2d(getLatitude(), getLongitude()); }
+Vector2d MapCanvas::getPositionPlane() const { return position;}
+Vector2d MapCanvas::getCursorPlane() const { return cursor; }
 
 double MapCanvas::getZoom() const { return m_zoom; }
 double MapCanvas::getRotation() const { return m_rotation; }
@@ -186,11 +204,6 @@ Vector2d MapCanvas::getCenter() const
 	}
 }
 
-void MapCanvas::refreshView()
-{
-	m_mark_update = true;
-}
-
 void MapCanvas::loadMap(std::shared_ptr<traffic::OSMSegment> map)
 {
 	if (map) {
@@ -201,21 +214,17 @@ void MapCanvas::loadMap(std::shared_ptr<traffic::OSMSegment> map)
 }
 
 bool MapCanvas::hasMap() const { return m_map.get(); }
-MapForm* MapCanvas::getForm() const { return m_form; }
-void MapCanvas::setForm(MapForm* form) { m_form = form; }
 
 bool MapCanvas::mouse_button_event(
 	const Vector2i& p, int button, bool down, int modifiers) {
 	Canvas::mouse_button_event(p, button, down, modifiers);
-	Vector2d position = inverseTransform(transformWindow(p));
-	if (button == GLFW_MOUSE_BUTTON_1) {
-		//for (auto & cb : m_cb_leftclick)
-		//	cb.function(position);
+	Vector2d position = inverseTransform(forwardTransformWindow(p));
+	if (button == GLFW_MOUSE_BUTTON_1 && down) {
+		triggerCallbackClickLeft();
 		return true;
 	}
-	else if (button == GLFW_MOUSE_BUTTON_2) {
-		//for (auto & cb : m_cb_rightclick)
-		//	cb.function(position);
+	else if (button == GLFW_MOUSE_BUTTON_2 && down) {
+		triggerCallbackClickRight();
 		return true;
 	}
 	return false;
@@ -237,8 +246,8 @@ bool MapCanvas::mouse_motion_event(
 	const Vector2i& p, const Vector2i& rel, int button, int modifiers)
 {
 	Canvas::mouse_motion_event(p, rel, button, modifiers);
-	cursor = inverseTransform(transformWindow(p));
-	refreshView();
+	cursor = inverseTransform(forwardTransformWindow(p));
+	triggerCallbackCursorMoved();
 	return true;
 }
 
@@ -303,20 +312,37 @@ void MapCanvas::updateKeys(double dt)
 void MapCanvas::update(double dt)
 {
 	updateKeys(dt);
-	if (m_mark_update && m_update_view) {
-		if (m_form) m_form->refresh();
-		m_mark_update = false;
-	}
 }
+
+#define CALL_EACH(name, value) for (const auto & cb : name) cb.function(value)
+void MapCanvas::triggerCallbackClickLeft() const { CALL_EACH(m_cb_leftclick, getCursor()); }
+void MapCanvas::triggerCallbackClickRight() const { CALL_EACH(m_cb_rightclick, getCursor()); }
+void MapCanvas::triggerCallbackMapMoved() const { CALL_EACH(m_cb_map_moved, getPosition()); }
+void MapCanvas::triggerCallbackCursorMoved() const { CALL_EACH(m_cb_cursor_moved, getCursor()); }
+void MapCanvas::triggerCallbackZoomChanged() const { CALL_EACH(m_cb_zoom_changed, m_zoom); }
+void MapCanvas::triggerCallbackRotationChanged() const { CALL_EACH(m_cb_rotation_changed, m_rotation); }
+void MapCanvas::triggerCallbackViewChanged() const { CALL_EACH(m_cb_view_changed, Rect()); }
 
 void MapCanvas::clearCallbacks()
 {
 	clearCallbacksLeftClick();
 	clearCallbacksRightClick();
+	clearCallbacksMapMoved();
+	clearCallbacksCursorMoved();
+	clearCallbacksZoomChanged();
+	clearCallbacksRotationChanged();
+	clearCallbacksViewChanged();
 }
 
 void MapCanvas::clearCallbacksLeftClick() { m_cb_leftclick.clear(); }
 void MapCanvas::clearCallbacksRightClick() { m_cb_rightclick.clear(); }
+void MapCanvas::clearCallbacksMapMoved() { m_cb_map_moved.clear(); }
+void MapCanvas::clearCallbacksCursorMoved() { m_cb_cursor_moved.clear(); }
+void MapCanvas::clearCallbacksZoomChanged() { m_cb_zoom_changed.clear(); }
+void MapCanvas::clearCallbacksRotationChanged() { m_cb_rotation_changed.clear(); }
+void MapCanvas::clearCallbacksViewChanged() { m_cb_view_changed.clear(); }
+
+// ---- Mesh ---- //
 
 void MapCanvas::genMesh()
 {
@@ -402,7 +428,7 @@ bool MapCanvas::keyboard_event(int key, int scancode, int action, int modifiers)
 
 MapForm::MapForm(nanogui::Screen* parent, Vector2i pos, MapCanvas* canvas) : FormHelper(parent)
 {
-	m_canvas = canvas;
+	setCanvas(canvas);
 	set_fixed_size(Vector2i(100, 20));
 	m_window = add_window(pos, "Position panel");
 
@@ -438,6 +464,13 @@ MapCanvas* MapForm::getCanvas() const noexcept
 void MapForm::setCanvas(MapCanvas* canvas) noexcept
 {
 	m_canvas = canvas;
+	if (m_canvas)
+	{
+		m_canvas->addCallbackCursorMoved([this](Vector2d) { refresh(); });
+		m_canvas->addCallbackZoomChanged([this](double) { refresh(); });
+		m_canvas->addCallbackRotationChanged([this](double) { refresh(); });
+		m_canvas->addCallbackMapMoved([this](Vector2d) { refresh(); });
+	}
 }
 
 MapInfo::MapInfo(nanogui::Screen* parent, Vector2i pos,
@@ -518,7 +551,8 @@ MapCanvas* MapInfo::getCanvas() const noexcept { return m_canvas; }
 
 void MapInfo::setCanvas(MapCanvas* canvas) { m_canvas = canvas; }
 
-MapDialogPath::MapDialogPath(nanogui::Screen* parent, Vector2i pos, MapCanvas* canvas)
+MapDialogPath::MapDialogPath(
+	nanogui::Screen* parent, Vector2i pos, MapCanvas* canvas, MapContextDialog *contextMenu)
 	: nanogui::FormHelper(parent)
 {
 	clear();
@@ -534,6 +568,15 @@ MapDialogPath::MapDialogPath(nanogui::Screen* parent, Vector2i pos, MapCanvas* c
 	add_variable<double>("Latitude", m_stop.x());
 	add_variable<double>("Longitude", m_stop.y());
 	add_button("Calculate Path", [this](){});
+
+	if (contextMenu)
+	{
+		contextMenu->addContextButton("Set Start", []() { });
+		contextMenu->addContextButton("Set End", []() { });
+		contextMenu->openListener().listen([this]() {
+			printf("OPEN!\n");
+		});
+	}
 }
 
 void MapDialogPath::clear()
@@ -542,9 +585,47 @@ void MapDialogPath::clear()
 	m_stop = { 0.0, 0.0 };
 }
 
+void MapDialogPath::setStart(Vector2d start) { m_start = start; }
+void MapDialogPath::setStop(Vector2d stop) { m_stop = stop; }
 
-MapDetail::MapDetail(nanogui::Widget* parent) : nanogui::Widget(parent)
+
+MapContextDialog::MapContextDialog(nanogui::Widget* parent, MapCanvas *canvas)
+	: nanogui::Window(parent, "Context Menu")
 {
-	m_box = new nanogui::TextBox(this, "Hello World");
-	add_child(m_box);
+	set_modal(true);
+	k_canvas = canvas;
+
+	set_width(100);
+	set_layout(new nanogui::BoxLayout(
+		nanogui::Orientation::Vertical,
+		nanogui::Alignment::Fill, 0, 0));
+
+	if (k_canvas)
+	{
+		k_canvas->addCallbackLeftClick([this](Vector2d) {
+			closeListener().trigger();
+			set_visible(false);
+		});
+		k_canvas->addCallbackRightClick([this](Vector2d pos) {
+			openListener().trigger();
+
+			Vector2d p1 = k_canvas->forwardTransform(k_canvas->getCursorPlane());
+			Vector2i p2 = k_canvas->inverseTransformWindow(p1);
+			set_position(p2);
+			set_visible(true);
+		});
+	}
 }
+
+void MapContextDialog::addSeparator() {
+
+}
+void MapContextDialog::addContextButton(
+	const std::string &title, std::function<void()> callback)
+{
+	nanogui::Button *obj = new nanogui::Button(this, title);
+	obj->set_callback(callback);
+}
+
+Listener<void()>& MapContextDialog::openListener() { return k_listener_open; }
+Listener<void()>& MapContextDialog::closeListener() { return k_listener_close; }

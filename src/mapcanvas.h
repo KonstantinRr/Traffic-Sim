@@ -23,6 +23,8 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
+#include "traffic/engine.h"
+
 #include <nanogui/screen.h>
 #include <nanogui/layout.h>
 #include <nanogui/window.h>
@@ -36,6 +38,8 @@
 
 #include "traffic/agent.h"
 #include "traffic/osm.h"
+
+#include "listener.h"
 
 using nanogui::Vector2i;
 using nanogui::Shader;
@@ -86,6 +90,22 @@ inline Vector4d toView(const glm::dvec4& value) { return Vector4d(value.x, value
 inline Vector3d toView(const glm::dvec3& value) { return Vector3d(value.x, value.y, value.z); }
 inline Vector2d toView(const glm::dvec2& value) { return Vector2d(value.x, value.y); }
 
+class MapContextDialog : public nanogui::Window {
+public:
+	MapContextDialog(nanogui::Widget *parent, MapCanvas *canvas);
+
+	void addSeparator();
+	void addContextButton(const std::string &title, std::function<void()> callback);
+
+	Listener<void()>& openListener();
+	Listener<void()>& closeListener();
+
+protected:
+	Listener<void()> k_listener_open;
+	Listener<void()> k_listener_close;
+	MapCanvas *k_canvas;
+};
+
 /// <summary>
 /// A window that gives information about the current latitude and longitude
 /// position of the map and the cursor. It can be used to manipulate the map
@@ -129,9 +149,11 @@ protected:
 class MapDialogPath : public nanogui::FormHelper {
 public:
 	MapDialogPath(nanogui::Screen *parent, Vector2i pos,
-		MapCanvas *canvas = nullptr);
+		MapCanvas *canvas, MapContextDialog *contextMenu);
 
 	void clear();
+	void setStart(Vector2d start);
+	void setStop(Vector2d stop);
 
 protected:
 	MapCanvas* m_canvas = nullptr;
@@ -141,45 +163,6 @@ protected:
 	Vector2d m_stop;
 };
 
-class MapDetail : public nanogui::Widget {
-public:
-	MapDetail(nanogui::Widget *parent);
-
-protected:
-	ref<nanogui::TextBox> m_box = nullptr;
-};
-
-template<typename Type>
-struct CallbackForm {
-	int32_t id;
-	std::function<Type> function;
-
-	template<typename Param>
-	CallbackForm(int32_t id, Param && func)
-		: id(id), function(func) { }
-};
-
-template<typename Type>
-struct CallbackReturn {
-	int32_t id;
-	std::vector<CallbackForm<Type>> *parent;
-
-	CallbackReturn(int32_t id, std::vector<CallbackForm<Type>>* parent)
-		: id(id), parent(parent) { }
-
-	bool isActive() const { return id != -1; }
-	void remove() {
-		id = -1;
-		for (size_t i = 0; i < parent->size();) {
-			if ((*parent)[i].id == id) {
-				parent->erase(parent->begin() + i);
-			}
-			else {
-				i++;
-			}
-		}
-	}
-};
 
 /// <summary>
 /// A canvas that is used to render a map to the screen. This canvas uses its own
@@ -188,8 +171,7 @@ struct CallbackReturn {
 /// </summary>
 class MapCanvas : public nanogui::Canvas {
 public:
-	MapCanvas(Widget* parent, std::shared_ptr<traffic::OSMSegment> map,
-		MapForm* form = nullptr);
+	MapCanvas(Widget* parent, std::shared_ptr<traffic::OSMSegment> map);
 
 	// ---- Position updates ---- //
 	void setLatitude(double lat);
@@ -204,6 +186,11 @@ public:
 	double getLongitude() const;
 	double getCursorLatitude() const;
 	double getCursorLongitude() const;
+	Vector2d getPosition() const;
+	Vector2d getCursor() const;
+	Vector2d getPositionPlane() const;
+	Vector2d getCursorPlane() const;
+
 	double getZoom() const;
 	double getRotation() const;
 	double getMinZoom() const;
@@ -211,13 +198,9 @@ public:
 
 	Vector2d getCenter() const;
 
-	void refreshView();
 	void loadMap(std::shared_ptr<traffic::OSMSegment> map);
 
 	bool hasMap() const;
-
-	MapForm* getForm() const;
-	void setForm(MapForm* form);
 
 	// ---- Events ---- //
 
@@ -241,12 +224,14 @@ public:
 	void update(double dt);
 
 	Vector2d scaleWindowDistance(Vector2i vec);
-	Vector2d transformWindow(Vector2i vec);
 
 	void applyTranslation(Vector2d rel);
 	void applyZoom(double iterations);
 	void applyRotation(double radians);
 	void resetView();
+
+	Vector2d forwardTransformWindow(Vector2i vec);
+	Vector2i inverseTransformWindow(Vector2d vec);
 
 	Vector2d forwardTransform(const Vector2d &pos) const;
 	Vector2d inverseTransform(const Vector2d &pos) const;
@@ -255,32 +240,41 @@ public:
 
 	void setActive(bool active);
 	
-	/*
-	template<typename Type>
-	CallbackReturn<void(Vector2d)> addCallbackLeftClick(const Type& function) {
-		m_cb_leftclick.push_back(
-			CallbackForm<void(Vector2d)>(
-				m_cb_leftclick.empty() ? 0 : m_cb_leftclick.back().id + 1,
-				std::function<void(Vector2d)>(function)
-			)
-		);
-	}
+	// ---- Callbacks ---- //
+	template<typename Type> CallbackReturn<void(Vector2d)>
+	addCallbackLeftClick(const Type& function) { return addCallback(function, m_cb_leftclick); }
 
-	template<typename Type>
-	CallbackReturn<void(Vector2d)> addCallbackRightClick(const Type& function) {
-		m_cb_rightclick.push_back(
-			CallbackForm<void(Vector2d)>(
-				m_cb_rightclick.empty() ? 0 : m_cb_rightclick.back().id + 1,
-				std::function<void(Vector2d)>(function)
-			)
-		);
-	}
-	*/
+	template<typename Type> CallbackReturn<void(Vector2d)>
+	addCallbackRightClick(const Type& function) { return addCallback(function, m_cb_rightclick); }
+
+	template<typename Type> CallbackReturn<void(Vector2d)>
+	addCallbackMapMoved(const Type& function) { return addCallback<Type, void(Vector2d)>(function, m_cb_map_moved); }
+
+	template<typename Type> CallbackReturn<void(Vector2d)>
+	addCallbackCursorMoved(const Type& function) { return addCallback(function, m_cb_cursor_moved); }
+
+	template<typename Type> CallbackReturn<void(double)>
+	addCallbackZoomChanged(const Type& function) { return addCallback(function, m_cb_zoom_changed); }
+
+	template<typename Type> CallbackReturn<void(double)>
+	addCallbackRotationChanged(const Type& function) { return addCallback(function, m_cb_rotation_changed); }
+
+	void triggerCallbackClickLeft() const;
+	void triggerCallbackClickRight() const;
+	void triggerCallbackMapMoved() const;
+	void triggerCallbackCursorMoved() const;
+	void triggerCallbackZoomChanged() const;
+	void triggerCallbackRotationChanged() const;
+	void triggerCallbackViewChanged() const;
 
 	void clearCallbacks();
 	void clearCallbacksLeftClick();
 	void clearCallbacksRightClick();
-
+	void clearCallbacksMapMoved();
+	void clearCallbacksCursorMoved();
+	void clearCallbacksZoomChanged();
+	void clearCallbacksRotationChanged();
+	void clearCallbacksViewChanged();
 protected:
 	// ---- Mesh access ---- //
 	void genMesh();
@@ -293,14 +287,31 @@ protected:
 	void setChunkMesh(
 		const std::vector<glm::vec2>& points);
 
+	// ---- Callbacks ---- //
+	template<typename Type, typename CBType>
+	CallbackReturn<CBType> addCallback(const Type& function, std::vector<CallbackForm<CBType>> &callbacks) {
+		int32_t id = callbacks.empty() ? 0 : callbacks.back().id + 1;
+		callbacks.push_back(
+			CallbackForm<CBType>(
+				id, std::function<CBType>(function)
+			)
+		);
+		return CallbackReturn(id, &callbacks);
+	}
+
 	// ---- Member variables ---- //
 
 	std::vector<CallbackForm<void(Vector2d)>> m_cb_leftclick;
 	std::vector<CallbackForm<void(Vector2d)>> m_cb_rightclick;
+	std::vector<CallbackForm<void(Vector2d)>> m_cb_map_moved;
+	std::vector<CallbackForm<void(Vector2d)>> m_cb_cursor_moved;
+
+	std::vector<CallbackForm<void(traffic::Rect)>> m_cb_view_changed;
+	std::vector<CallbackForm<void(double)>> m_cb_zoom_changed;
+	std::vector<CallbackForm<void(double)>> m_cb_rotation_changed;
 
 	nanogui::ref<nanogui::Shader> m_shader;
 	nanogui::ref<nanogui::Shader> m_chunk_shader;
-	MapForm* m_form;
 
 	std::shared_ptr<traffic::OSMSegment> m_map;
 	size_t pointsSize, chunksSize;

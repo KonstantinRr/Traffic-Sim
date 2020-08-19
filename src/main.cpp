@@ -90,6 +90,7 @@ protected:
 	ref<ConcurrencyManager> manager = nullptr;
 	ref<MapInfo> uiInfo = nullptr;
 	ref<MapForm> uiMap = nullptr;
+	ref<MapContextDialog> uiContext = nullptr;
 	ref<MapDialogPath> uiPath = nullptr;
 	std::shared_ptr<World> world;
 };
@@ -138,16 +139,15 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	m_canvas->setActive(true);
 	m_canvas->set_background_color({ 100, 100, 100, 255 });
 
+	uiContext = new MapContextDialog(this, m_canvas.get());
 	uiMap = new MapForm(this, {10, 10}, m_canvas.get());
 	uiInfo = new MapInfo(this, {10, 340}, world.get(), m_canvas.get());
-	uiPath = new MapDialogPath(this, {10, 10}, m_canvas.get());
-	// Applies the forms
-	m_canvas->setForm(uiMap);
+	uiPath = new MapDialogPath(this, {10, 10}, m_canvas.get(), uiContext.get());
 
 	perform_layout();
 
 	// Loads the default map
-	bool loadDefault = false;
+	bool loadDefault = true;
 	if (loadDefault) {
 		world->loadMap("maps/warendorf.xmlmap");
 		m_canvas->loadMap(world->getMap());
