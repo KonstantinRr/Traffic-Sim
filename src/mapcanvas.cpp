@@ -182,6 +182,10 @@ double MapCanvas::getRotation() const { return m_rotation; }
 double MapCanvas::getMinZoom() const { return m_min_zoom; }
 double MapCanvas::getMaxZoom() const { return m_max_zoom; }
 
+double MapCanvas::getDistance(Vector2d p1, Vector2d p2) const {
+	return distance(toGLM(p1), toGLM(p2));
+}
+
 Vector2d MapCanvas::getCenter() const
 {
 	if (m_map) {
@@ -597,6 +601,10 @@ MapDialogPath::MapDialogPath(
 	add_group("End");
 	add_variable<double>("Latitude", m_stop_lat);
 	add_variable<double>("Longitude", m_stop_lon);
+	add_variable<double>("Distance",
+		[this](double val) { },
+		[this]() { return m_canvas ?
+			m_canvas->getDistance(getStart(), getStop()) : 0.0; }, false);
 	add_button("Calculate Path", [this](){});
 
 	if (k_context)
@@ -634,6 +642,9 @@ void MapDialogPath::setStop(Vector2d stop) {
 	m_stop_lon = stop.y();
 	refresh();
 }
+
+Vector2d MapDialogPath::getStart() const { return Vector2d(m_start_lat, m_start_lon); }
+Vector2d MapDialogPath::getStop() const { return Vector2d(m_stop_lat, m_stop_lon); }
 
 
 MapContextDialog::MapContextDialog(nanogui::Widget* parent, MapCanvas *canvas)

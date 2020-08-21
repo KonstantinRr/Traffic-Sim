@@ -154,6 +154,8 @@ public:
 	void clear();
 	void setStart(Vector2d start);
 	void setStop(Vector2d stop);
+	Vector2d getStart() const;
+	Vector2d getStop() const;
 
 protected:
 	MapCanvas* m_canvas = nullptr;
@@ -191,6 +193,8 @@ public:
 	Vector2d getCursor() const;
 	Vector2d getPositionPlane() const;
 	Vector2d getCursorPlane() const;
+
+	double getDistance(Vector2d p1, Vector2d p2) const;
 
 	double getZoom() const;
 	double getRotation() const;
