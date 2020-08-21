@@ -230,13 +230,21 @@ public:
 	void applyRotation(double radians);
 	void resetView();
 
-	Vector2d forwardTransformWindow(Vector2i vec);
-	Vector2i inverseTransformWindow(Vector2d vec);
+	// ---- Transformations ---- //
 
-	Vector2d forwardTransform(const Vector2d &pos) const;
-	Vector2d inverseTransform(const Vector2d &pos) const;
-	Matrix3f createTransform3D() const;
-	Matrix4f createTransform4D() const;
+	// -- Window <-> View -- //
+	Vector2d windowToView(Vector2i vec);
+	Vector2i viewToWindow(Vector2d vec);
+	// -- View <-> Plane -- //
+	Vector2d viewToPlane(const Vector2d &pos) const;
+	Vector2d planeToView(const Vector2d &pos) const;
+	// -- Plane <-> Position -- //
+	Vector2d planeToPosition(const Vector2d &pos) const;
+	Vector2d positionToPlane(const Vector2d &pos) const;
+
+
+	Matrix3f transformPlaneToView3D() const;
+	Matrix4f transformPlaneToView4D() const;
 
 	void setActive(bool active);
 	

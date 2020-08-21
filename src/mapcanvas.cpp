@@ -95,12 +95,12 @@ Vector2d MapCanvas::scaleWindowDistance(Vector2i vec) {
 		-vec.y() * 2.0 / width());
 }
 
-Vector2d MapCanvas::forwardTransformWindow(Vector2i vec) {
+Vector2d MapCanvas::windowToView(Vector2i vec) {
 	return Vector2d(
 		vec.x() * 2.0 / width() - 1.0,
 		(height() - vec.y()) * 2.0 / height() - 1.0);
 }
-Vector2i MapCanvas::inverseTransformWindow(Vector2d vec) {
+Vector2i MapCanvas::viewToWindow(Vector2d vec) {
 	return Vector2i(
 		(int32_t)((vec.x() + 1.0) / 2.0 * width()),
 		-((int32_t)((vec.y() + 1.0) / 2.0 * height()) - height())
@@ -218,7 +218,7 @@ bool MapCanvas::hasMap() const { return m_map.get(); }
 bool MapCanvas::mouse_button_event(
 	const Vector2i& p, int button, bool down, int modifiers) {
 	Canvas::mouse_button_event(p, button, down, modifiers);
-	Vector2d position = inverseTransform(forwardTransformWindow(p));
+	Vector2d position = planeToView(windowToView(p));
 	if (button == GLFW_MOUSE_BUTTON_1 && down) {
 		triggerCallbackClickLeft();
 		return true;
@@ -246,7 +246,7 @@ bool MapCanvas::mouse_motion_event(
 	const Vector2i& p, const Vector2i& rel, int button, int modifiers)
 {
 	Canvas::mouse_motion_event(p, rel, button, modifiers);
-	cursor = inverseTransform(forwardTransformWindow(p));
+	cursor = planeToView(windowToView(p));
 	triggerCallbackCursorMoved();
 	return true;
 }
@@ -359,7 +359,7 @@ void MapCanvas::clearMesh()
 	chunksSize = 0;
 }
 
-Vector2d MapCanvas::forwardTransform(const Vector2d& pos) const
+Vector2d MapCanvas::viewToPlane(const Vector2d& pos) const
 {
 	glm::dvec2 f = toGLM(pos - position);
 	f = glm::rotate(f, m_rotation);
@@ -367,7 +367,7 @@ Vector2d MapCanvas::forwardTransform(const Vector2d& pos) const
 	return toView(f);
 }
 
-Vector2d MapCanvas::inverseTransform(const Vector2d& pos) const
+Vector2d MapCanvas::planeToView(const Vector2d& pos) const
 {
 	glm::dvec2 f = toGLM(pos) / dvec2(m_zoom, m_zoom * width() / height());
 	f = glm::rotate(f, -m_rotation);
@@ -375,7 +375,17 @@ Vector2d MapCanvas::inverseTransform(const Vector2d& pos) const
 	return toView(f);
 }
 
-Matrix3f MapCanvas::createTransform3D() const
+Vector2d MapCanvas::planeToPosition(const Vector2d& pos) const
+{
+	return Vector2d();
+}
+
+Vector2d MapCanvas::positionToPlane(const Vector2d& pos) const
+{
+	return Vector2d();
+}
+
+Matrix3f MapCanvas::transformPlaneToView3D() const
 {
 	glm::mat3 matrix(1.0f);
 	glm::translate(matrix, vec2(toGLM(-position)));
@@ -384,7 +394,7 @@ Matrix3f MapCanvas::createTransform3D() const
 	return toView(matrix);
 }
 
-Matrix4f MapCanvas::createTransform4D() const {
+Matrix4f MapCanvas::transformPlaneToView4D() const {
 	Matrix4f translate = Matrix4f::translate(
 		Vector3f(-position.x(), -position.y(), 0.0f));
 	Matrix4f rotation = Matrix4f::rotate(Vector3f(0.0f, 0.0f, 1.0f), m_rotation);
@@ -397,7 +407,7 @@ void MapCanvas::draw_contents()
 {
 	using namespace nanogui;
 	if (m_active && m_success && hasMap()) {
-		auto transform = createTransform4D();
+		auto transform = transformPlaneToView4D();
 	
 		// Chunk rendering
 		if (m_render_chunk)
@@ -609,8 +619,8 @@ MapContextDialog::MapContextDialog(nanogui::Widget* parent, MapCanvas *canvas)
 		k_canvas->addCallbackRightClick([this](Vector2d pos) {
 			openListener().trigger();
 
-			Vector2d p1 = k_canvas->forwardTransform(k_canvas->getCursorPlane());
-			Vector2i p2 = k_canvas->inverseTransformWindow(p1);
+			Vector2d p1 = k_canvas->viewToPlane(k_canvas->getCursorPlane());
+			Vector2i p2 = k_canvas->viewToWindow(p1);
 			set_position(p2);
 			set_visible(true);
 		});
