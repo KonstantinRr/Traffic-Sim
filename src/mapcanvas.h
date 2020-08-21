@@ -157,10 +157,11 @@ public:
 
 protected:
 	MapCanvas* m_canvas = nullptr;
+	MapContextDialog *k_context = nullptr;
 	nanogui::ref<nanogui::Window> m_window = nullptr;
 
-	Vector2d m_start;
-	Vector2d m_stop;
+	double m_start_lat, m_start_lon;
+	double m_stop_lat, m_stop_lon;
 };
 
 
@@ -233,8 +234,8 @@ public:
 	// ---- Transformations ---- //
 
 	// -- Window <-> View -- //
-	Vector2d windowToView(Vector2i vec);
-	Vector2i viewToWindow(Vector2d vec);
+	Vector2d windowToView(Vector2i vec) const;
+	Vector2i viewToWindow(Vector2d vec) const;
 	// -- View <-> Plane -- //
 	Vector2d viewToPlane(const Vector2d &pos) const;
 	Vector2d planeToView(const Vector2d &pos) const;
@@ -242,6 +243,8 @@ public:
 	Vector2d planeToPosition(const Vector2d &pos) const;
 	Vector2d positionToPlane(const Vector2d &pos) const;
 
+	Vector2d windowToPosition(Vector2i vec) const;
+	Vector2i positionToWindow(Vector2d vec) const;
 
 	Matrix3f transformPlaneToView3D() const;
 	Matrix4f transformPlaneToView4D() const;

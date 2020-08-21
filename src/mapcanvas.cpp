@@ -95,18 +95,6 @@ Vector2d MapCanvas::scaleWindowDistance(Vector2i vec) {
 		-vec.y() * 2.0 / width());
 }
 
-Vector2d MapCanvas::windowToView(Vector2i vec) {
-	return Vector2d(
-		vec.x() * 2.0 / width() - 1.0,
-		(height() - vec.y()) * 2.0 / height() - 1.0);
-}
-Vector2i MapCanvas::viewToWindow(Vector2d vec) {
-	return Vector2i(
-		(int32_t)((vec.x() + 1.0) / 2.0 * width()),
-		-((int32_t)((vec.y() + 1.0) / 2.0 * height()) - height())
-	);
-}
-
 void MapCanvas::applyTranslation(Vector2d rel)
 {
 	Vector2d mx = toView(glm::rotate(toGLM(rel / m_zoom), -m_rotation));
@@ -218,7 +206,7 @@ bool MapCanvas::hasMap() const { return m_map.get(); }
 bool MapCanvas::mouse_button_event(
 	const Vector2i& p, int button, bool down, int modifiers) {
 	Canvas::mouse_button_event(p, button, down, modifiers);
-	Vector2d position = planeToView(windowToView(p));
+	Vector2d position = viewToPlane(windowToView(p));
 	if (button == GLFW_MOUSE_BUTTON_1 && down) {
 		triggerCallbackClickLeft();
 		return true;
@@ -246,7 +234,7 @@ bool MapCanvas::mouse_motion_event(
 	const Vector2i& p, const Vector2i& rel, int button, int modifiers)
 {
 	Canvas::mouse_motion_event(p, rel, button, modifiers);
-	cursor = planeToView(windowToView(p));
+	cursor = viewToPlane(windowToView(p));
 	triggerCallbackCursorMoved();
 	return true;
 }
@@ -359,7 +347,20 @@ void MapCanvas::clearMesh()
 	chunksSize = 0;
 }
 
-Vector2d MapCanvas::viewToPlane(const Vector2d& pos) const
+Vector2d MapCanvas::windowToView(Vector2i vec) const {
+	return Vector2d(
+		vec.x() * 2.0 / width() - 1.0,
+		(height() - vec.y()) * 2.0 / height() - 1.0);
+}
+
+Vector2i MapCanvas::viewToWindow(Vector2d vec) const {
+	return Vector2i(
+		(int32_t)((vec.x() + 1.0) / 2.0 * width()),
+		-((int32_t)((vec.y() + 1.0) / 2.0 * height()) - height())
+	);
+}
+
+Vector2d MapCanvas::planeToView(const Vector2d& pos) const
 {
 	glm::dvec2 f = toGLM(pos - position);
 	f = glm::rotate(f, m_rotation);
@@ -367,7 +368,7 @@ Vector2d MapCanvas::viewToPlane(const Vector2d& pos) const
 	return toView(f);
 }
 
-Vector2d MapCanvas::planeToView(const Vector2d& pos) const
+Vector2d MapCanvas::viewToPlane(const Vector2d& pos) const
 {
 	glm::dvec2 f = toGLM(pos) / dvec2(m_zoom, m_zoom * width() / height());
 	f = glm::rotate(f, -m_rotation);
@@ -377,12 +378,30 @@ Vector2d MapCanvas::planeToView(const Vector2d& pos) const
 
 Vector2d MapCanvas::planeToPosition(const Vector2d& pos) const
 {
-	return Vector2d();
+	return toView(planeToSphere(
+		toGLM(pos), toGLM(getCenter())));
 }
 
 Vector2d MapCanvas::positionToPlane(const Vector2d& pos) const
 {
-	return Vector2d();
+	return toView(sphereToPlane(
+		toGLM(pos), toGLM(getCenter())));
+}
+
+Vector2d MapCanvas::windowToPosition(Vector2i vec) const
+{
+	Vector2d view = windowToView(vec);
+	Vector2d plane = viewToPlane(view);
+	Vector2d pos = planeToPosition(plane);
+	return pos;
+}
+
+Vector2i MapCanvas::positionToWindow(Vector2d vec) const
+{
+	Vector2d plane = positionToPlane(vec);
+	Vector2d view = planeToView(plane);
+	Vector2i window = viewToWindow(view);
+	return window;
 }
 
 Matrix3f MapCanvas::transformPlaneToView3D() const
@@ -570,33 +589,51 @@ MapDialogPath::MapDialogPath(
 	set_fixed_size(Vector2i(100, 20));
 	m_window = add_window(pos, "Position panel");
 	m_canvas = canvas;
+	k_context = contextMenu;
 
 	add_group("Start");
-	add_variable<double>("Latitude", m_start.x());
-	add_variable<double>("Longitude", m_start.y());
+	add_variable<double>("Latitude", m_start_lat);
+	add_variable<double>("Longitude", m_start_lon);
 	add_group("End");
-	add_variable<double>("Latitude", m_stop.x());
-	add_variable<double>("Longitude", m_stop.y());
+	add_variable<double>("Latitude", m_stop_lat);
+	add_variable<double>("Longitude", m_stop_lon);
 	add_button("Calculate Path", [this](){});
 
-	if (contextMenu)
+	if (k_context)
 	{
-		contextMenu->addContextButton("Set Start", []() { });
-		contextMenu->addContextButton("Set End", []() { });
-		contextMenu->openListener().listen([this]() {
-			printf("OPEN!\n");
+		k_context->addContextButton("Set Start", [this]() {
+			if (m_canvas) {
+				Vector2d pos = m_canvas->windowToPosition(k_context->position());
+				setStart(pos);
+				m_canvas->request_focus(); // moves focus back to canvas
+			}
+		});
+		k_context->addContextButton("Set End", [this]() {
+			if (m_canvas) {
+				Vector2d pos = m_canvas->windowToPosition(k_context->position());
+				setStop(pos);
+				m_canvas->request_focus(); // moves focus back to canvas
+			}
 		});
 	}
 }
 
 void MapDialogPath::clear()
 {
-	m_start = { 0.0, 0.0 };
-	m_stop = { 0.0, 0.0 };
+	m_start_lat = 0.0, m_start_lon = 0.0;
+	m_stop_lat = 0.0, m_stop_lon = 0.0;
 }
 
-void MapDialogPath::setStart(Vector2d start) { m_start = start; }
-void MapDialogPath::setStop(Vector2d stop) { m_stop = stop; }
+void MapDialogPath::setStart(Vector2d start) {
+	m_start_lat = start.x();
+	m_start_lon = start.y();
+	refresh();
+}
+void MapDialogPath::setStop(Vector2d stop) {
+	m_stop_lat = stop.x();
+	m_stop_lon = stop.y();
+	refresh();
+}
 
 
 MapContextDialog::MapContextDialog(nanogui::Widget* parent, MapCanvas *canvas)
@@ -619,7 +656,7 @@ MapContextDialog::MapContextDialog(nanogui::Widget* parent, MapCanvas *canvas)
 		k_canvas->addCallbackRightClick([this](Vector2d pos) {
 			openListener().trigger();
 
-			Vector2d p1 = k_canvas->viewToPlane(k_canvas->getCursorPlane());
+			Vector2d p1 = k_canvas->planeToView(k_canvas->getCursorPlane());
 			Vector2i p2 = k_canvas->viewToWindow(p1);
 			set_position(p2);
 			set_visible(true);
