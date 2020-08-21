@@ -58,7 +58,7 @@ namespace traffic
     glm::dvec2 planeToSphere(glm::dvec2 latLon, glm::dvec2 center);
     glm::dvec2 planeToSphere(glm::dvec2 latLon);
     
-    double distance(glm::dvec2 p1, glm::dvec2 p2, double radius=6371e3);
+    double distance(glm::dvec2 p1, glm::dvec2 p2, double radius=6372.8);
 
     // ---- Sphere to Plane ---- //
 
