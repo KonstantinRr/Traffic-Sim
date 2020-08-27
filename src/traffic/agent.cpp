@@ -120,8 +120,22 @@ traffic::World::World(ConcurrencyManager* manager, const std::shared_ptr<OSMSegm
 
 void traffic::World::loadMap(const std::shared_ptr<OSMSegment>& map)
 {
-    m_map = map;
-    m_graph = make_shared<Graph>(m_map);
+    m_map = make_shared<OSMSegment>(map->findNodes(
+        OSMFinder()
+            //.setNodeAccept([](const OSMNode &node) { return !node.hasTag("highway"); })
+            //.setWayAccept([](const OSMWay& way) { return !way.hasTag("highway"); })
+            //.setRelationAccept([](const OSMRelation& rl) { return !rl.hasTag("highway"); })
+    ));
+    k_highway_map = make_shared<OSMSegment>(map->findNodes(
+        OSMFinder()
+            .setWayAccept([](const OSMWay& way) { return way.hasTag("highway"); })
+            .setRelationAccept([](const OSMRelation&) { return false; }) // relations are not needed
+    ));
+
+    m_map->summary();
+    k_highway_map->summary();
+
+    m_graph = make_shared<Graph>(k_highway_map);
 }
 
 void traffic::World::loadMap(const std::string& file)
@@ -142,9 +156,9 @@ void traffic::World::loadMap(const std::string& file)
     args.threads = 8;
     args.pool = &m_manager->getPool();
     args.timings = &timings;
+    
     auto newMap = std::make_shared<OSMSegment>(parseXMLMap(args));
     timings.summary();
-    newMap->summary();
 
     loadMap(newMap);
 }

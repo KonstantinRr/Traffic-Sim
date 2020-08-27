@@ -499,18 +499,19 @@ bool OSMSegment::hasNodeIndex(int64_t id) const { return nodeMap->find(id) != no
 bool OSMSegment::hasWayIndex(int64_t id) const { return wayMap->find(id) != wayMap->end(); }
 bool OSMSegment::hasRelationIndex(int64_t id) const { return relationMap->find(id) != relationMap->end(); }
 
-bool OSMSegment::addNode(const OSMNode& nd, bool updateBoundaries)
+bool OSMSegment::addNode(const OSMNode& nd)
 {
 	auto it = nodeMap->find(nd.getID());
-	if (it == nodeMap->end()) return false;
+	if (it != nodeMap->end()) return false; // node already exists
+
+	// indexes the new node
 	(*nodeMap)[nd.getID()] = nodeList->size();
 	nodeList->push_back(nd);
-	if (updateBoundaries) {
-		if (nd.getLat() < lowerLat) lowerLat = nd.getLat();
-		else if (nd.getLat() > upperLat) upperLat = nd.getLat();
-		if (nd.getLon() < lowerLon) lowerLon = nd.getLon();
-		else if (nd.getLon() > upperLon) upperLon = nd.getLon();
-	}
+	
+	if (nd.getLat() < lowerLat) lowerLat = nd.getLat();
+	else if (nd.getLat() > upperLat) upperLat = nd.getLat();
+	if (nd.getLon() < lowerLon) lowerLon = nd.getLon();
+	else if (nd.getLon() > upperLon) upperLon = nd.getLon();
 	return true;
 }
 
@@ -521,12 +522,15 @@ bool OSMSegment::addWay(const OSMWay& wd) {
 		for (const size_t wayIndex : it->second) {
 			if ((*wayList)[wayIndex].getID() == wd.getID() &&
 				(*wayList)[wayIndex].getSubIndex() == wd.getSubIndex()) {
+				// way is already stored and indexed
 				return false;
 			}
 		}
 	}
+	// the batch does not contain this way, it is added to the list and indexed
 	(*wayMap)[wd.getID()].push_back(wayList->size());
 	wayList->push_back(wd);
+
 	return true;
 }
 
@@ -537,37 +541,39 @@ bool OSMSegment::addRelation(const OSMRelation& re) {
 		for (const size_t rlIndex : it->second) {
 			if ((*relationList)[rlIndex].getID() == re.getID() &&
 				(*relationList)[rlIndex].getSubIndex() == re.getSubIndex()) {
+				// relation is already stored and indexed
 				return false;
 			}
 		}
 	}
+	// the batch does not contain this way, it is added to the list and indexed
 	(*relationMap)[re.getID()].push_back(relationList->size());
 	relationList->push_back(re);
+
 	return true;
 }
 
-bool traffic::OSMSegment::addWayRecursive(const OSMWay& wd, const OSMSegment& lookup, bool updateBounds)
+bool traffic::OSMSegment::addWayRecursive(const OSMWay& wd, const OSMSegment& lookup)
 {
 	if (!addWay(wd)) return false;
 	for (int64_t id : wd.getNodes()) {
 		size_t nodeID = lookup.getNodeIndex(id);
-		if (nodeID == numeric_limits<size_t>::max()) {
-			continue;
+		if (nodeID != numeric_limits<size_t>::max()) {
+			addNode(lookup.getNode(id));
 		}
-		addNode(lookup.getNode(id), updateBounds);
 	}
 	return true;
 }
 
-bool traffic::OSMSegment::addRelationRecursive(const OSMRelation& re, const OSMSegment& lookup, bool updateBounds)
+bool traffic::OSMSegment::addRelationRecursive(const OSMRelation& re, const OSMSegment& lookup)
 {
 	if (!addRelation(re)) return false;
-	for (RelationMember node : (*re.getNodes()))
-		addNode(lookup.getNode(node.getIndex()), updateBounds);
-	for (RelationMember way : (*re.getWays()))
-		addWayRecursive(lookup.getWay(way.getIndex()), lookup, updateBounds);
-	for (RelationMember r : (*re.getRelations()))
-		addRelationRecursive(lookup.getRelation(r.getIndex()), lookup, updateBounds);
+	for (const RelationMember &node : (*re.getNodes()))
+		addNode(lookup.getNode(node.getIndex()));
+	for (const RelationMember &way : (*re.getWays()))
+		addWayRecursive(lookup.getWay(way.getIndex()), lookup);
+	for (const RelationMember &r : (*re.getRelations()))
+		addRelationRecursive(lookup.getRelation(r.getIndex()), lookup);
 	return true;
 }
 
@@ -609,34 +615,31 @@ size_t OSMSegment::getSize() const {
 }
 
 OSMSegment OSMSegment::findSquareNodes(const Rect& r) const {
+
 	return findNodes(
-		[r](const OSMNode& nd) { return r.contains(Point(nd.getLat(), nd.getLon())); },
-		[](const OSMWay&) { return true; },
-		[r](const OSMWay&, const OSMNode& nd) { return r.contains(Point(nd.getLat(), nd.getLon())); }
+		OSMFinder()
+			.setNodeAccept([r](const OSMNode& nd) { return r.contains(Point(nd.getLat(), nd.getLon())); })
 	);
 }
 
 OSMSegment OSMSegment::findTagNodes(const string& tag) const {
 	return findNodes(
-		[&tag](const OSMNode& nd) { return nd.hasTag(tag); },
-		[](const OSMWay&) { return true; },
-		[&tag](const OSMWay&, const OSMNode& nd) { return nd.hasTag(tag); }
+		OSMFinder()
+			.setNodeAccept([&tag](const OSMNode& nd) { return nd.hasTag(tag); })
 	);
 }
 
 OSMSegment OSMSegment::findTagWays(const string& tag) const {
 	return findNodes(
-		[](const OSMNode&) { return true; },
-		[&tag](const OSMWay& wd) { return wd.hasTag(tag); },
-		[](const OSMWay&, const OSMNode&) { return true; }
+		OSMFinder()
+			.setWayAccept([&tag](const OSMWay& wd) { return wd.hasTag(tag); })
 	);
 }
 
 OSMSegment OSMSegment::findCircleNode(const Circle& circle) const {
 	return findNodes(
-		[circle](const OSMNode& nd) { return circle.contains(Point(nd.getLat(), nd.getLon())); },
-		[](const OSMWay&) { return true; },
-		[circle](const OSMWay&, const OSMNode& nd) { return circle.contains(Point(nd.getLat(), nd.getLon())); }
+		OSMFinder()
+			.setNodeAccept([circle](const OSMNode& nd) { return circle.contains(Point(nd.getLat(), nd.getLon())); })
 	);
 }
 
@@ -663,6 +666,77 @@ int64_t OSMSegment::findClosestNode(float lat, float lon) const {
 		};
 	}
 	return currentID;
+}
+
+OSMSegment OSMSegment::findNodes(const OSMFinder &finder) const {
+	OSMSegment newSeg; // new segment
+	// Adds all nodes that fullfill the requirements
+	for (const OSMNode &nd : (*nodeList)) {
+		if (finder.acceptNode(nd)) {
+			newSeg.addNode(nd);
+		}
+	}
+
+	// Adds all ways that fullfill the requirements
+	for (const OSMWay &wd : (*wayList)) {
+		if (finder.acceptWay(wd)) { // way is accepeted
+			std::vector<int64_t> wayNodes;
+			for (int64_t id : wd.getNodes()) {
+				// iterates through the list of nodes and adds all nodes
+				// that meet the sub-requirements.
+				if (finder.acceptWayNodes(wd, getNode(id)) && newSeg.hasNodeIndex(id)) {
+					wayNodes.push_back(id);
+				}
+			}
+
+			// creates a new way from all accepted nodes. The way and
+			// all children nodes are merged into the new map
+			if (!wayNodes.empty()) {
+				newSeg.addWayRecursive(OSMWay(
+					wd.getID(), wd.getVer(),
+					make_shared<vector<int64_t>>(move(wayNodes)),
+					wd.getData()
+				), *this);
+			}
+		}
+	}
+	for (const OSMRelation &rl : (*relationList)) {
+		if (finder.acceptRelation(rl)) {
+			std::vector<RelationMember> nodeRefs;
+			std::vector<RelationMember> wayRefs;
+			std::vector<RelationMember> relationRefs;
+
+			for (const RelationMember &member : *rl.getNodes()) {
+				if (newSeg.hasNodeIndex(member.getIndex()) &&
+					finder.acceptRelationNodes(rl, newSeg.getNode(member.getIndex()))) {
+					nodeRefs.push_back(RelationMember(member));
+				}
+			}
+
+			for (const RelationMember &member : *rl.getWays()) {
+				if (newSeg.hasWayIndex(member.getIndex()) &&
+					finder.acceptRelationWays(rl, newSeg.getWay(member.getIndex()))) {
+					wayRefs.push_back(RelationMember(member));
+				}
+			}
+
+			for (const RelationMember &member : *rl.getRelations()) {
+				if (newSeg.hasRelationIndex(member.getIndex()) &&
+					finder.acceptRelationRelations(rl, newSeg.getRelation(member.getIndex()))) {
+					relationRefs.push_back(RelationMember(member));
+				}
+			}
+
+			newSeg.addRelationRecursive(OSMRelation(
+				rl.getID(), rl.getVer(), rl.getData(),
+				make_shared<vector<RelationMember>>(move(nodeRefs)),
+				make_shared<vector<RelationMember>>(move(wayRefs)),
+				make_shared<vector<RelationMember>>(move(relationRefs))
+			), *this);
+		}
+	}
+	newSeg.recalculateBoundaries();
+	return newSeg;
 }
 
 const shared_ptr<vector<OSMNode>>& OSMSegment::getNodes() const noexcept { return nodeList; }
@@ -805,7 +879,7 @@ bool traffic::OSMMap::addNode(const OSMNode& nd)
 {
 	size_t index = getSegmentIndex(nd.getLat(), nd.getLon());
 	if (index == numeric_limits<size_t>::max()) return false;
-	m_chunks[index].addNode(nd, false);
+	m_chunks[index].addNode(nd);
 	
 	if (m_nodemap.find(nd.getID()) == m_nodemap.end())
 		m_nodemap[nd.getID()] = index;
@@ -829,7 +903,7 @@ bool traffic::OSMMap::addWayRecursive(const OSMWay& way, const OSMSegment& looku
 			// adds the node to the child segment and continues the way.
 			// This happens when the current node is in the same chunk as the
 			// previous one or if it is generally the first node of the way.
-			if (m_chunks[index].addNode(nd, false)) {
+			if (m_chunks[index].addNode(nd)) {
 				m_nodemap[nd.getID()] = index;
 				currentWay.addNode(nd.getID());
 			}
@@ -943,4 +1017,25 @@ size_t traffic::OSMMap::toStore(prec_t lat, prec_t lon) const
 	return toStore(localLat, localLon);
 }
 
+OSMFinder::OSMFinder()
+{
+	acceptNode = [](const OSMNode&) { return true; };
+	acceptWay = [](const OSMWay&) { return true; };
+	acceptRelation = [](const OSMRelation&) { return true; };
 
+	acceptWayNodes = [](const OSMWay&, const OSMNode&) { return true; };
+
+	acceptRelationNodes = [](const OSMRelation &, const OSMNode&) { return true; };
+	acceptRelationWays = [](const OSMRelation &, const OSMWay&) { return true; };
+	acceptRelationRelations = [](const OSMRelation &, const OSMRelation&) { return true; };
+}
+
+OSMFinder& OSMFinder::setNodeAccept(std::function<bool(const OSMNode&)> accept) { acceptNode = accept; return *this;}
+OSMFinder& OSMFinder::setWayAccept(std::function<bool(const OSMWay&)> accept) { acceptWay = accept; return *this; }
+OSMFinder& OSMFinder::setRelationAccept(std::function<bool(const OSMRelation&)> accept) { acceptRelation = accept; return *this; }
+
+OSMFinder& OSMFinder::setWayNodeAccept(std::function<bool(const OSMWay&, const OSMNode&)> accept) { acceptWayNodes = accept; return *this; }
+
+OSMFinder& OSMFinder::setRelationNodeAccept(std::function<bool(const OSMRelation &, const OSMNode&)> accept) { acceptRelationNodes = accept; return *this; }
+OSMFinder& OSMFinder::setRelationWayAccept(std::function<bool(const OSMRelation &, const OSMWay&)> accept) { acceptRelationWays = accept; return *this; }
+OSMFinder& OSMFinder::setRelationRelationAccept(std::function<bool(const OSMRelation &, const OSMRelation&)> accept) { acceptRelationRelations = accept; return *this; }

@@ -415,6 +415,32 @@ namespace traffic
 		inline size_t getIndex() const { return index_; }
 	};
 
+	struct OSMFinder {
+	public:
+		std::function<bool(const OSMNode&)> acceptNode;
+		std::function<bool(const OSMWay&)> acceptWay;
+		std::function<bool(const OSMRelation&)> acceptRelation;
+
+		std::function<bool(const OSMWay&, const OSMNode&)> acceptWayNodes;
+
+		std::function<bool(const OSMRelation &, const OSMNode&)> acceptRelationNodes;
+		std::function<bool(const OSMRelation &, const OSMWay&)> acceptRelationWays;
+		std::function<bool(const OSMRelation &, const OSMRelation&)> acceptRelationRelations;
+
+	public:
+		OSMFinder();
+
+		OSMFinder& setNodeAccept(std::function<bool(const OSMNode&)> accept);
+		OSMFinder& setWayAccept(std::function<bool(const OSMWay&)> accept);
+		OSMFinder& setRelationAccept(std::function<bool(const OSMRelation&)> accept);
+
+		OSMFinder& setWayNodeAccept(std::function<bool(const OSMWay&, const OSMNode&)> accept);
+
+		OSMFinder& setRelationNodeAccept(std::function<bool(const OSMRelation &, const OSMNode&)> accept);
+		OSMFinder& setRelationWayAccept(std::function<bool(const OSMRelation &, const OSMWay&)> accept);
+		OSMFinder& setRelationRelationAccept(std::function<bool(const OSMRelation &, const OSMRelation&)> accept);
+	};
+
 	/// This class represents a MapStructure. It combines all
 	/// values stored in the OpenStreetMap XML format.
 	/// nodeList		All nodes stored in the OSMSegment section
@@ -517,46 +543,19 @@ namespace traffic
 		/// (1) Adds a new node to this map
 		/// (2) Adds a new way to this map
 		/// (3) Adds a new relation to this map
-		bool addNode(const OSMNode& nd, bool updateBoundaries = true);
+		bool addNode(const OSMNode& nd);
 		bool addWay(const OSMWay& wd);
 		bool addRelation(const OSMRelation& re);
 
-		bool addWayRecursive(const OSMWay &way, const OSMSegment& lookup, bool updateBounds=true);
-		bool addRelationRecursive(const OSMRelation &re, const OSMSegment& lookup, bool updateBounds=true);
+		bool addWayRecursive(const OSMWay &way, const OSMSegment& lookup);
+		bool addRelationRecursive(const OSMRelation &re, const OSMSegment& lookup);
 
 		/// Finds all nodes that satisfy the given functions
 		/// FuncNodes&& this function takes a const OSMNode& and returns a boolean
 		///		that marks whether this node is accepted
 		/// FuncWays&& this function takes a const OSMWay& and returns a boolean
 		///		that marks whether this way is accepted
-		template<typename FuncNodes, typename FuncWays, typename FuncWayNodes>//, typename AcceptRelation>
-		OSMSegment findNodes(
-			FuncNodes&& funcNodes,
-			FuncWays&& funcWays,
-			FuncWayNodes&& funcWayNodes
-			//AcceptRelation&& funcRel
-		) const {
-			OSMSegment map;
-			for (const OSMNode &nd : (*nodeList)) {
-				if (funcNodes(nd)) map.addNode(nd, false);
-			}
-			for (const OSMWay &wd : (*wayList)) {
-				if (funcWays(wd)) {
-					auto st = std::make_shared<std::vector<int64_t>>();
-					for (int64_t id : wd.getNodes()) {
-						const OSMNode& nd = getNode(id);
-						if (funcWayNodes(wd, nd)) st->push_back(id);
-					}
-					if (!st->empty()) {
-						OSMWay w(wd.getID(), wd.getVer(), move(st), wd.getData());
-						map.addWayRecursive(w, *this);
-					}
-				}
-			}
-			map.recalculateBoundaries();
-			return map;
-		}
-
+		OSMSegment findNodes(const OSMFinder &finder) const;
 
 		std::vector<int64_t> findAdress(
 			const std::string& city, const std::string& postcode,

@@ -435,6 +435,7 @@ void MapCanvas::draw_contents()
 		// Chunk rendering
 		if (m_render_chunk)
 		{
+			//m_chunk_shader->set_buffer
 			m_chunk_shader->set_uniform("mvp", transform);
 			m_chunk_shader->set_uniform("color", Vector4f(1.0f, 0.0f, 0.0f, 1.0f));
 			m_chunk_shader->begin();

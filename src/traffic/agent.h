@@ -118,6 +118,8 @@ namespace traffic
         // ---- Member definitions ---- //
         ConcurrencyManager *m_manager;
         std::shared_ptr<OSMSegment> m_map;
+        std::shared_ptr<OSMSegment> k_highway_map;
+
         std::shared_ptr<Graph> m_graph;
         std::vector<Agent> m_agents;
     }; 
