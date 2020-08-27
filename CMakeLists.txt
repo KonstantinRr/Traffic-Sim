@@ -101,5 +101,5 @@ target_link_libraries(Controller PRIVATE nanogui)
 add_subdirectory(fmt)
 target_link_libraries(Controller PRIVATE fmt::fmt)
 
-add_subdirectory(spdlog)
-target_link_libraries(Controller PRIVATE spdlog::spdlog)
+#add_subdirectory(spdlog)
+#target_link_libraries(Controller PRIVATE spdlog::spdlog)
