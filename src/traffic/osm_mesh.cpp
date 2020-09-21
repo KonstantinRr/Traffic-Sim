@@ -99,12 +99,12 @@ dvec2 traffic::sphereToPlane(dvec2 latLon) {
 
 double traffic::distance(dvec2 p1, dvec2 p2, double radius)
 {
-        double dLat = (p2.x - p1.x) * M_PI / 180.0; 
-        double dLon = (p2.y - p1.y) * M_PI / 180.0; 
+        double dLat = (p2.x - p1.x) * Pi / 180.0;
+        double dLon = (p2.y - p1.y) * Pi / 180.0;
   
         // convert to radians 
-        double lat1 = (p1.x) * M_PI / 180.0; 
-        double lat2 = (p2.x) * M_PI / 180.0; 
+        double lat1 = (p1.x) * Pi / 180.0;
+        double lat2 = (p2.x) * Pi / 180.0;
   
         // apply formulae 
         double a = pow(sin(dLat / 2), 2) +  

@@ -122,9 +122,9 @@ void traffic::World::loadMap(const std::shared_ptr<OSMSegment>& map)
 {
     m_map = make_shared<OSMSegment>(map->findNodes(
         OSMFinder()
-            //.setNodeAccept([](const OSMNode &node) { return !node.hasTag("highway"); })
-            //.setWayAccept([](const OSMWay& way) { return !way.hasTag("highway"); })
-            //.setRelationAccept([](const OSMRelation& rl) { return !rl.hasTag("highway"); })
+            .setNodeAccept([](const OSMNode &node) { return !node.hasTag("highway"); })
+            .setWayAccept([](const OSMWay& way) { return !way.hasTag("highway"); })
+            .setRelationAccept([](const OSMRelation& rl) { return !rl.hasTag("highway"); })
     ));
     k_highway_map = make_shared<OSMSegment>(map->findNodes(
         OSMFinder()
@@ -165,6 +165,7 @@ void traffic::World::loadMap(const std::string& file)
 
 bool traffic::World::hasMap() const noexcept { return m_map.get(); }
 const std::shared_ptr<OSMSegment>& traffic::World::getMap() const { return m_map; }
+const std::shared_ptr<OSMSegment>& traffic::World::getHighwayMap() const { return k_highway_map; }
 const std::shared_ptr<Graph>& World::getGraph() const { return m_graph; }
 const std::vector<Agent>& World::getAgents() const { return m_agents; }
 

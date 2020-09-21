@@ -156,6 +156,7 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	if (loadDefault) {
 		world->loadMap("maps/warendorf.xmlmap");
 		m_canvas->loadMap(world->getMap());
+		m_canvas->loadHighwayMap(world->getHighwayMap());
 		m_canvas->setActive(true);
 	}
 

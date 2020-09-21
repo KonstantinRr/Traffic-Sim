@@ -39,20 +39,18 @@ MultiPassShader::MultiPassShader(nanogui::RenderPass *render_pass,
    const std::string &vertex_shader,
    const std::string &fragment_shader,
    Shader::BlendMode blend_mode)
-   : nanogui::Shader(render_pass, name, vertex_shader, fragment_shader, blend_mode) {}
-
-void MultiPassShader::set_buffer(int id,
-	const std::string &name, nanogui::VariableType type, size_t ndim,
-    const size_t *shape, const void *data)
+   : nanogui::Shader(render_pass, name, vertex_shader, fragment_shader, blend_mode)
 {
-	Shader::set_buffer(name, type, ndim, shape, data);
-	k_buffers[id][name] = m_buffers[name];
+	k_empty = m_buffers;
 }
 
-void MultiPassShader::load(int id) {
-	auto it = k_buffers.find(id);
-	if (it != k_buffers.end()) 
-		m_buffers = it->second; // copies the buffers
+void MultiPassShader::set_buffer(int id,
+	const std::string& name, nanogui::VariableType type, size_t ndim,
+	const size_t* shape, const void* data)
+{
+	Shader::set_buffer(name, type, ndim, shape, data);
+	k_buffers[id][name] = m_buffers[name]; // instance storage
+	m_buffers[name] = k_empty[name]; // erase to default value
 }
 
 void MultiPassShader::set_buffer(int id,
@@ -60,6 +58,23 @@ void MultiPassShader::set_buffer(int id,
 	std::initializer_list<size_t> shape, const void *data)
 {
 	Shader::set_buffer(name, type, shape, data);	
+	k_buffers[id][name] = m_buffers[name]; // instance storage
+	m_buffers[name] = k_empty[name]; // erase to default value
+}
+
+void MultiPassShader::load(int id) {
+	auto it = k_buffers.find(id);
+	if (it != k_buffers.end()) {
+		m_buffers = it->second;
+	}
+	else {
+		printf("COULD NOT FIND ID %d\n", id);
+	}
+}
+
+int MultiPassShader::gen_id() {
+	k_buffers[lastID] = k_empty;
+	return lastID++;
 }
 
 /*
@@ -158,10 +173,10 @@ void MapCanvas::resetView()
 	m_zoom = 25.0;
 	m_rotation = 0.0;
 
-	triggerCallbackMapMoved();
-	triggerCallbackCursorMoved();
-	triggerCallbackRotationChanged();
-	triggerCallbackZoomChanged();
+	cb_map_moved().trigger(getPosition());
+	cb_cursor_moved().trigger(getCursor());
+	cb_rotation_changed().trigger(getRotation());
+	cb_zoom_changed().trigger(getZoom());
 }
 
 void MapCanvas::setLatitude(double lat)
@@ -188,21 +203,21 @@ void MapCanvas::setLatLon(double lat, double lon)
 void MapCanvas::setPosition(Vector2d pos)
 {
 	position = pos;
-	triggerCallbackMapMoved();
-	triggerCallbackViewChanged();
+	cb_map_moved().trigger(getPosition());
+	cb_view_changed().trigger(Rect());
 }
 
 void MapCanvas::setZoom(double zoom)
 {
 	m_zoom = zoom;
-	triggerCallbackZoomChanged();
-	triggerCallbackViewChanged();
+	cb_zoom_changed().trigger(getZoom());
+	cb_view_changed().trigger(Rect());
 }
 
 void MapCanvas::setRotation(double rotation)
 {
 	m_rotation = rotation;
-	triggerCallbackRotationChanged();
+	cb_rotation_changed().trigger(getRotation());
 }
 
 double MapCanvas::getLatitude() const { return planeToLatitude(position.x(), toGLM(getCenter())); }
@@ -237,10 +252,23 @@ void MapCanvas::loadMap(std::shared_ptr<traffic::OSMSegment> map)
 {
 	if (map) {
 		m_map = map;
-		genMesh();
+		mesh_map = genMeshFromMap(*map);
 		resetView();
 	}
 }
+
+void MapCanvas::loadHighwayMap(std::shared_ptr<traffic::OSMSegment> map)
+{
+	if (map) {
+		m_highway_map = map;
+		std::vector<vec2> points = generateMesh(*map);
+		std::vector<vec3> colors(points.size(), glm::vec3(1.0f, 0.0f, 0.0f));
+		mesh_highway = genMesh(colors, points);
+		resetView();
+	}
+}
+
+
 
 bool MapCanvas::hasMap() const { return m_map.get(); }
 
@@ -249,11 +277,11 @@ bool MapCanvas::mouse_button_event(
 	Canvas::mouse_button_event(p, button, down, modifiers);
 	Vector2d position = viewToPlane(windowToView(p));
 	if (button == GLFW_MOUSE_BUTTON_1 && down) {
-		triggerCallbackClickLeft();
+		cb_leftclick().trigger(getCursor());
 		return true;
 	}
 	else if (button == GLFW_MOUSE_BUTTON_2 && down) {
-		triggerCallbackClickRight();
+		cb_rightclick().trigger(getCursor());
 		return true;
 	}
 	return false;
@@ -276,7 +304,7 @@ bool MapCanvas::mouse_motion_event(
 {
 	Canvas::mouse_motion_event(p, rel, button, modifiers);
 	cursor = viewToPlane(windowToView(p));
-	triggerCallbackCursorMoved();
+	cb_cursor_moved().trigger(getCursor());
 	return true;
 }
 
@@ -287,23 +315,24 @@ bool MapCanvas::scroll_event(const Vector2i& p, const Vector2f& rel)
 	return true;
 }
 
-void MapCanvas::setMesh(const std::vector<glm::vec3>& colors,
+Mesh MapCanvas::genMesh(
+	const std::vector<glm::vec3>& colors,
 	const std::vector<glm::vec2>& points)
 {
-	if (m_success) {
-		pointsSize = points.size();
-		m_shader->set_buffer("vVertex", nanogui::VariableType::Float32,
-			{ points.size(), 2 }, points.data());
-		m_shader->set_buffer("color", nanogui::VariableType::Float32,
-			{ colors.size(), 3 }, colors.data());
-	}
+	Mesh ms = Mesh(m_shader->gen_id(), points.size());
+	std::cout << "Generated mesh " << ms.modelID << "\n";
+	m_shader->set_buffer(ms.modelID, "vVertex", nanogui::VariableType::Float32,
+		{ points.size(), 2 }, points.data());
+	m_shader->set_buffer(ms.modelID, "color", nanogui::VariableType::Float32,
+		{ colors.size(), 3 }, colors.data());
+	return ms;
 }
 
 void MapCanvas::setChunkMesh(const std::vector<glm::vec2> &points)
 {
 	if (m_success) {
-		chunksSize = points.size();
-		m_chunk_shader->set_buffer("vVertex", nanogui::VariableType::Float32,
+		mesh_chunk = Mesh(m_shader->gen_id(), points.size());
+		m_chunk_shader->set_buffer(mesh_chunk.modelID, "vVertex", nanogui::VariableType::Float32,
 			{ points.size(), 2 }, points.data());
 	}
 }
@@ -343,49 +372,19 @@ void MapCanvas::update(double dt)
 	updateKeys(dt);
 }
 
-#define CALL_EACH(name, value) for (const auto & cb : name) cb.function(value)
-void MapCanvas::triggerCallbackClickLeft() const { CALL_EACH(m_cb_leftclick, getCursor()); }
-void MapCanvas::triggerCallbackClickRight() const { CALL_EACH(m_cb_rightclick, getCursor()); }
-void MapCanvas::triggerCallbackMapMoved() const { CALL_EACH(m_cb_map_moved, getPosition()); }
-void MapCanvas::triggerCallbackCursorMoved() const { CALL_EACH(m_cb_cursor_moved, getCursor()); }
-void MapCanvas::triggerCallbackZoomChanged() const { CALL_EACH(m_cb_zoom_changed, m_zoom); }
-void MapCanvas::triggerCallbackRotationChanged() const { CALL_EACH(m_cb_rotation_changed, m_rotation); }
-void MapCanvas::triggerCallbackViewChanged() const { CALL_EACH(m_cb_view_changed, Rect()); }
-
-void MapCanvas::clearCallbacks()
-{
-	clearCallbacksLeftClick();
-	clearCallbacksRightClick();
-	clearCallbacksMapMoved();
-	clearCallbacksCursorMoved();
-	clearCallbacksZoomChanged();
-	clearCallbacksRotationChanged();
-	clearCallbacksViewChanged();
-}
-
-void MapCanvas::clearCallbacksLeftClick() { m_cb_leftclick.clear(); }
-void MapCanvas::clearCallbacksRightClick() { m_cb_rightclick.clear(); }
-void MapCanvas::clearCallbacksMapMoved() { m_cb_map_moved.clear(); }
-void MapCanvas::clearCallbacksCursorMoved() { m_cb_cursor_moved.clear(); }
-void MapCanvas::clearCallbacksZoomChanged() { m_cb_zoom_changed.clear(); }
-void MapCanvas::clearCallbacksRotationChanged() { m_cb_rotation_changed.clear(); }
-void MapCanvas::clearCallbacksViewChanged() { m_cb_view_changed.clear(); }
-
 // ---- Mesh ---- //
 
-void MapCanvas::genMesh()
+Mesh MapCanvas::genMeshFromMap(const OSMSegment& seg)
 {
-	if (m_success && m_map) {
-		std::vector<vec2> points = generateMesh(*m_map);
-		std::vector<vec3> colors(points.size(), glm::vec3(1.0f, 1.0f, 1.0f));
-		setMesh(colors, points);
-	}
+	std::vector<vec2> points = generateMesh(seg);
+	std::vector<vec3> colors(points.size(), glm::vec3(1.0f, 1.0f, 1.0f));
+	return genMesh(colors, points);
 }
 
 void MapCanvas::clearMesh()
 {
-	pointsSize = 0;
-	chunksSize = 0;
+	mesh_chunk = Mesh();
+	mesh_map = Mesh();
 }
 
 Vector2d MapCanvas::windowToView(Vector2i vec) const {
@@ -476,14 +475,22 @@ void MapCanvas::draw_contents()
 			m_chunk_shader->set_uniform("mvp", transform);
 			m_chunk_shader->set_uniform("color", Vector4f(1.0f, 0.0f, 0.0f, 1.0f));
 			m_chunk_shader->begin();
-			m_shader->draw_array(Shader::PrimitiveType::Line, 0, chunksSize, false);
+			m_chunk_shader->load(mesh_chunk.modelID);
+			m_chunk_shader->draw_array(Shader::PrimitiveType::Line, 0, mesh_chunk.size, false);
 			m_chunk_shader->end();
 		}
 
 		// renders the 
+		m_shader->load(mesh_map.modelID);
 		m_shader->set_uniform("mvp", transform);
 		m_shader->begin();
-		m_shader->draw_array(Shader::PrimitiveType::Line, 0, pointsSize, false);
+		m_shader->draw_array(Shader::PrimitiveType::Line, 0, mesh_map.size, false);
+
+		m_shader->load(mesh_highway.modelID);
+		m_shader->set_uniform("mvp", transform);
+		m_shader->begin();
+		m_shader->draw_array(Shader::PrimitiveType::Line, 0, mesh_highway.size, false);
+
 		m_shader->end();
 	}
 }
@@ -537,10 +544,10 @@ void MapForm::setCanvas(MapCanvas* canvas) noexcept
 	m_canvas = canvas;
 	if (m_canvas)
 	{
-		m_canvas->addCallbackCursorMoved([this](Vector2d) { refresh(); });
-		m_canvas->addCallbackZoomChanged([this](double) { refresh(); });
-		m_canvas->addCallbackRotationChanged([this](double) { refresh(); });
-		m_canvas->addCallbackMapMoved([this](Vector2d) { refresh(); });
+		m_canvas->cb_cursor_moved().listen([this](Vector2d) { refresh(); });
+		m_canvas->cb_zoom_changed().listen([this](double) { refresh(); });
+		m_canvas->cb_rotation_changed().listen([this](double) { refresh(); });
+		m_canvas->cb_map_moved().listen([this](Vector2d) { refresh(); });
 	}
 }
 
@@ -698,11 +705,11 @@ MapContextDialog::MapContextDialog(nanogui::Widget* parent, MapCanvas *canvas)
 
 	if (k_canvas)
 	{
-		k_canvas->addCallbackLeftClick([this](Vector2d) {
+		k_canvas->cb_leftclick().listen([this](Vector2d) {
 			closeListener().trigger();
 			set_visible(false);
 		});
-		k_canvas->addCallbackRightClick([this](Vector2d pos) {
+		k_canvas->cb_rightclick().listen([this](Vector2d pos) {
 			openListener().trigger();
 
 			Vector2d p1 = k_canvas->planeToView(k_canvas->getCursorPlane());
@@ -725,3 +732,12 @@ void MapContextDialog::addContextButton(
 
 Listener<void()>& MapContextDialog::openListener() { return k_listener_open; }
 Listener<void()>& MapContextDialog::closeListener() { return k_listener_close; }
+
+Mesh::Mesh() : modelID(-1), size(0)
+{
+}
+
+Mesh::Mesh(int modelID, size_t size)
+	: modelID(modelID), size(size)
+{
+}

@@ -90,11 +90,20 @@ inline Vector4d toView(const glm::dvec4& value) { return Vector4d(value.x, value
 inline Vector3d toView(const glm::dvec3& value) { return Vector3d(value.x, value.y, value.z); }
 inline Vector2d toView(const glm::dvec2& value) { return Vector2d(value.x, value.y); }
 
+class Mesh {
+public:
+	int modelID;
+	size_t size;
+public:
+	Mesh();
+	Mesh(int modelID, size_t size);
+	
+};
 
 class MultiPassShader : public nanogui::Shader {
-	// storage
-	//std::unordered_map<std::string, Buffer> m_empty;
 protected:
+	int lastID = 0;
+	std::unordered_map<std::string, Buffer> k_empty;
 	std::unordered_map<int,
 		std::unordered_map<std::string, Buffer>> k_buffers;
 	
@@ -106,6 +115,7 @@ public:
 		const std::string &name, nanogui::VariableType type,
 		std::initializer_list<size_t> shape, const void *data);
 
+	int gen_id();
 	void load(int id);
 
 	MultiPassShader(nanogui::RenderPass *render_pass,
@@ -215,7 +225,7 @@ public:
 	void setPosition(Vector2d pos);
 	void setZoom(double zoom);
 	void setRotation(double rotation);
-	
+
 	// ---- Positional reads ---- //
 	double getLatitude() const;
 	double getLongitude() const;
@@ -236,7 +246,7 @@ public:
 	Vector2d getCenter() const;
 
 	void loadMap(std::shared_ptr<traffic::OSMSegment> map);
-
+	void loadHighwayMap(std::shared_ptr<traffic::OSMSegment> map);
 	bool hasMap() const;
 
 	// ---- Events ---- //
@@ -247,10 +257,8 @@ public:
 		const Vector2i& p, const Vector2i& rel, int button, int modifiers) override;
 	virtual bool mouse_motion_event(
 		const Vector2i& p, const Vector2i& rel, int button, int modifiers) override;
-
 	virtual bool scroll_event(
 		const Vector2i& p, const Vector2f& rel) override;
-
 	virtual bool keyboard_event(
 		int key, int scancode, int action, int modifiers) override;
 
@@ -288,48 +296,23 @@ public:
 	void setActive(bool active);
 	
 	// ---- Callbacks ---- //
-	template<typename Type> CallbackReturn<void(Vector2d)>
-	addCallbackLeftClick(const Type& function) { return addCallback(function, m_cb_leftclick); }
+	Listener<void(Vector2d)>& cb_leftclick() { return m_cb_leftclick; }
+	Listener<void(Vector2d)>& cb_rightclick() { return m_cb_rightclick; }
+	Listener<void(Vector2d)>& cb_map_moved() { return m_cb_map_moved; }
+	Listener<void(Vector2d)>& cb_cursor_moved() { return m_cb_cursor_moved; }
+	Listener<void(traffic::Rect)>& cb_view_changed() { return m_cb_view_changed; }
+	Listener<void(double)>& cb_zoom_changed() { return m_cb_zoom_changed; }
+	Listener<void(double)>& cb_rotation_changed() { return m_cb_rotation_changed; }
 
-	template<typename Type> CallbackReturn<void(Vector2d)>
-	addCallbackRightClick(const Type& function) { return addCallback(function, m_cb_rightclick); }
-
-	template<typename Type> CallbackReturn<void(Vector2d)>
-	addCallbackMapMoved(const Type& function) { return addCallback<Type, void(Vector2d)>(function, m_cb_map_moved); }
-
-	template<typename Type> CallbackReturn<void(Vector2d)>
-	addCallbackCursorMoved(const Type& function) { return addCallback(function, m_cb_cursor_moved); }
-
-	template<typename Type> CallbackReturn<void(double)>
-	addCallbackZoomChanged(const Type& function) { return addCallback(function, m_cb_zoom_changed); }
-
-	template<typename Type> CallbackReturn<void(double)>
-	addCallbackRotationChanged(const Type& function) { return addCallback(function, m_cb_rotation_changed); }
-
-	void triggerCallbackClickLeft() const;
-	void triggerCallbackClickRight() const;
-	void triggerCallbackMapMoved() const;
-	void triggerCallbackCursorMoved() const;
-	void triggerCallbackZoomChanged() const;
-	void triggerCallbackRotationChanged() const;
-	void triggerCallbackViewChanged() const;
-
-	void clearCallbacks();
-	void clearCallbacksLeftClick();
-	void clearCallbacksRightClick();
-	void clearCallbacksMapMoved();
-	void clearCallbacksCursorMoved();
-	void clearCallbacksZoomChanged();
-	void clearCallbacksRotationChanged();
-	void clearCallbacksViewChanged();
 protected:
 	// ---- Mesh access ---- //
-	void genMesh();
 	void clearMesh();
 
-	void setMesh(
+	Mesh genMeshFromMap(const traffic::OSMSegment &seg);
+	Mesh genMesh(
 		const std::vector<glm::vec3>& colors,
 		const std::vector<glm::vec2>& points);
+
 
 	void setChunkMesh(
 		const std::vector<glm::vec2>& points);
@@ -348,20 +331,24 @@ protected:
 
 	// ---- Member variables ---- //
 
-	std::vector<CallbackForm<void(Vector2d)>> m_cb_leftclick;
-	std::vector<CallbackForm<void(Vector2d)>> m_cb_rightclick;
-	std::vector<CallbackForm<void(Vector2d)>> m_cb_map_moved;
-	std::vector<CallbackForm<void(Vector2d)>> m_cb_cursor_moved;
+	Mesh mesh_chunk;
+	Mesh mesh_map, mesh_highway;
 
-	std::vector<CallbackForm<void(traffic::Rect)>> m_cb_view_changed;
-	std::vector<CallbackForm<void(double)>> m_cb_zoom_changed;
-	std::vector<CallbackForm<void(double)>> m_cb_rotation_changed;
+	Listener<void(Vector2d)> m_cb_leftclick;
+	Listener<void(Vector2d)> m_cb_rightclick;
+	Listener<void(Vector2d)> m_cb_map_moved;
+	Listener<void(Vector2d)> m_cb_cursor_moved;
+	Listener<void(traffic::Rect)> m_cb_view_changed;
+	Listener<void(double)> m_cb_zoom_changed;
+	Listener<void(double)> m_cb_rotation_changed;
 
-	nanogui::ref<nanogui::Shader> m_shader;
-	nanogui::ref<nanogui::Shader> m_chunk_shader;
+	nanogui::ref<MultiPassShader> m_shader;
+	nanogui::ref<MultiPassShader> m_chunk_shader;
 
 	std::shared_ptr<traffic::OSMSegment> m_map;
-	size_t pointsSize, chunksSize;
+	std::shared_ptr<traffic::OSMSegment> m_highway_map;
+
+
 	bool m_active;
 	bool m_success;
 	bool m_render_chunk;

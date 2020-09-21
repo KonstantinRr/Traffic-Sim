@@ -111,6 +111,7 @@ namespace traffic
         void loadMap(const std::string &file);
         
         const std::shared_ptr<OSMSegment>& getMap() const;
+        const std::shared_ptr<OSMSegment>& getHighwayMap() const;
         const std::shared_ptr<Graph>& getGraph() const;
         const std::vector<Agent>& getAgents() const;
 

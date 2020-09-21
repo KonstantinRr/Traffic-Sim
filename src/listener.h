@@ -79,7 +79,7 @@ public:
 	template<typename ... Args>
 	void trigger(Args&& ... args) {
 		for (const auto & ref : callbacks) {
-			ref.function(std::forward(args)...);
+			ref.function(std::forward<Args>(args)...);
 		}
 	}
 
