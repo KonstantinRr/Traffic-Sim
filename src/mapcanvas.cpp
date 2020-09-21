@@ -34,6 +34,43 @@
 using namespace traffic;
 using namespace glm;
 
+MultiPassShader::MultiPassShader(nanogui::RenderPass *render_pass,
+   const std::string &name,
+   const std::string &vertex_shader,
+   const std::string &fragment_shader,
+   Shader::BlendMode blend_mode)
+   : nanogui::Shader(render_pass, name, vertex_shader, fragment_shader, blend_mode) {}
+
+void MultiPassShader::set_buffer(int id,
+	const std::string &name, nanogui::VariableType type, size_t ndim,
+    const size_t *shape, const void *data)
+{
+	Shader::set_buffer(name, type, ndim, shape, data);
+	k_buffers[id][name] = m_buffers[name];
+}
+
+void MultiPassShader::load(int id) {
+	auto it = k_buffers.find(id);
+	if (it != k_buffers.end()) 
+		m_buffers = it->second; // copies the buffers
+}
+
+void MultiPassShader::set_buffer(int id,
+	const std::string &name, nanogui::VariableType type,
+	std::initializer_list<size_t> shape, const void *data)
+{
+	Shader::set_buffer(name, type, shape, data);	
+}
+
+/*
+MultiPassShader::Buffer& MultiPassShader::getBuffer(const std::string &uniform) {
+	return 
+}
+void MultiPassShader::setBuffer(const std::string &uniform, const Buffer& buffer) {
+
+}
+*/
+
 // ---- View Conversion ---- //
 
 nanogui::Matrix4f toView(const glm::mat4& value)
@@ -76,10 +113,10 @@ MapCanvas::MapCanvas(Widget* parent,
 
 	try {
 		// Defines the used shaders
-		m_chunk_shader = new Shader(
+		m_chunk_shader = new MultiPassShader(
 			render_pass(), "shader_chunk",
 			getChunkVertex(), getChunkFragment());
-		m_shader = new Shader(
+		m_shader = new MultiPassShader(
 			render_pass(), "shader_map",
 			getLineVertex(), getLineFragment());
 		m_success = true;
@@ -273,7 +310,7 @@ void MapCanvas::setChunkMesh(const std::vector<glm::vec2> &points)
 
 void MapCanvas::setActive(bool active)
 {
-	m_active = true;
+	m_active = active;
 }
 
 void MapCanvas::updateKeys(double dt)

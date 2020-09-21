@@ -100,10 +100,12 @@ int main(int argc, char** argv)
 {
 	try
 	{
+		//ref<ConcurrencyManager> manager = new ConcurrencyManager();
+		//auto world = std::make_shared<World>(manager.get());
 		nanogui::init();
 		{
 			nanogui::ref<TrafficApplication> app = new TrafficApplication();
-			//app->draw_all();
+			app->draw_all();
 			app->set_visible(true);
 			nanogui::mainloop((float)(1.0 / 60.0 * 1000.0));
 		}
@@ -125,14 +127,19 @@ int main(int argc, char** argv)
 }
 
 TrafficApplication::TrafficApplication() : nanogui::Screen(
-	Vector2i(800, 600), "TrafficSim", true)
-{
-
+	Vector2i(800, 600), "TrafficSim",
+	true, 	// Resizeable
+	false,  // Fullscreen,
+	false, 	// Depth buffer
+	false, 	// Stencil buffer
+	false, 	// Float buffer
+	3U, 	// GL Major version
+	2U 		// GL Minor version
+) {
 	using namespace nanogui;
+
 	manager = new ConcurrencyManager();
-
 	world = std::make_shared<World>(manager.get());
-
 
 	m_canvas = new MapCanvas(this, world->getMap());
 	m_canvas->set_layout(new FullscreenLayout());
@@ -144,14 +151,15 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	uiInfo = new MapInfo(this, {10, 340}, world.get(), m_canvas.get());
 	uiPath = new MapDialogPath(this, {10, 10}, m_canvas.get(), uiContext.get());
 
-	perform_layout();
-
 	// Loads the default map
 	bool loadDefault = true;
 	if (loadDefault) {
 		world->loadMap("maps/warendorf.xmlmap");
 		m_canvas->loadMap(world->getMap());
+		m_canvas->setActive(true);
 	}
+
+	perform_layout();
 
 	// collects the initial time stamp for the main loop //
 	lastTime = glfwGetTime();

@@ -90,6 +90,38 @@ inline Vector4d toView(const glm::dvec4& value) { return Vector4d(value.x, value
 inline Vector3d toView(const glm::dvec3& value) { return Vector3d(value.x, value.y, value.z); }
 inline Vector2d toView(const glm::dvec2& value) { return Vector2d(value.x, value.y); }
 
+
+class MultiPassShader : public nanogui::Shader {
+	// storage
+	//std::unordered_map<std::string, Buffer> m_empty;
+protected:
+	std::unordered_map<int,
+		std::unordered_map<std::string, Buffer>> k_buffers;
+	
+public:
+	void set_buffer(int id,
+		const std::string &name, nanogui::VariableType type, size_t ndim,
+        const size_t *shape, const void *data);
+	void set_buffer(int id,
+		const std::string &name, nanogui::VariableType type,
+		std::initializer_list<size_t> shape, const void *data);
+
+	void load(int id);
+
+	MultiPassShader(nanogui::RenderPass *render_pass,
+       const std::string &name,
+       const std::string &vertex_shader,
+       const std::string &fragment_shader,
+       Shader::BlendMode blend_mode = Shader::BlendMode::None);
+
+	//Buffer& getBuffer(const std::string &uniform);
+	//void setBuffer(const std::string &uniform, const Buffer& buffer);
+};
+
+struct ShaderPass {
+	
+};
+
 class MapContextDialog : public nanogui::Window {
 public:
 	MapContextDialog(nanogui::Widget *parent, MapCanvas *canvas);
