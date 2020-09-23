@@ -47,6 +47,37 @@ namespace traffic
 	struct Route; // Defines a route between two graph nodes
 	class Graph; // Combines a list of GraphNodes in a network by GraphEdges
 	
+	struct FastGraphEdge;
+	struct FastGraphNode;
+
+	struct FastGraphEdge {
+		size_t goal;
+		prec_t weight;
+		std::vector<int64_t> optimized;
+
+		FastGraphEdge() = default;
+		FastGraphEdge(size_t goal, prec_t weight);
+	};
+
+	struct FastGraphNode {
+		int64_t nodeID;
+		prec_t lat, lon;
+		std::vector<FastGraphEdge> connections;
+
+		FastGraphNode() = default;
+		FastGraphNode(int64_t nodeID, prec_t lat, prec_t lon);
+	};
+
+	class FastGraph {
+	public:
+		FastGraph(const Graph& graph);
+
+		Route findRoute(size_t start, size_t goal);
+
+	protected:
+		std::vector<FastGraphNode> graphBuffer;
+	};
+
 
 	/// <summary>
 	/// Graph edges are used to connect GraphNodes with each other. The implemented
@@ -132,6 +163,8 @@ namespace traffic
 
 		virtual ~Graph() = default;
 
+		void optimize();
+
 		/// <summary>Applies the AStar (A*) path finding algorithm on the graph</summary>
 		/// <param name="start">The starting node ID</param>
 		/// <param name="goal">The destination node ID</param>
@@ -156,6 +189,8 @@ namespace traffic
 		/// <returns>The corresponding index or -1 if that node does not exist</returns>
 		int64_t findNodeIndex(int64_t id) const;
 
+		GraphNode& findClosestNode(const Point &p);
+
 		// ---- Getter functions ---- //
 
 		graphmap_t& getMap();
@@ -179,6 +214,8 @@ namespace traffic
 	protected:
 		std::vector<GraphNode> graphBuffer;
 		graphmap_t graphMap;
+
+		std::unique_ptr<FastGraph> fastGraph;
 		std::shared_ptr<OSMSegment> xmlmap;
 	};
 }

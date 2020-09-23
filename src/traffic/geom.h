@@ -55,6 +55,8 @@ namespace traffic
 		explicit Point();
 		explicit Point(Distance distance);
 		explicit Point(prec_t lat, prec_t lon);
+		Point(glm::vec2 vec);
+		Point(glm::dvec2 vec);
 
 		/// (1) Returns the latitude of this point
 		/// (2) Returns the longitude of thuis point

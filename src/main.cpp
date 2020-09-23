@@ -34,7 +34,6 @@
 #include <nanogui/shader.h>
 #include <nanogui/renderpass.h>
 #include <nanogui/formhelper.h>
-#include <GLFW/glfw3.h>
 
 #include <algorithm>
 #include <iostream>
@@ -51,8 +50,6 @@
 
 using namespace traffic;
 using namespace glm;
-
-#define NANOGUI_USE_OPENGL
 
 using nanogui::Vector3f;
 using nanogui::Vector2f;
@@ -149,7 +146,7 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	uiContext = new MapContextDialog(this, m_canvas.get());
 	uiMap = new MapForm(this, {10, 10}, m_canvas.get());
 	uiInfo = new MapInfo(this, {10, 340}, world.get(), m_canvas.get());
-	uiPath = new MapDialogPath(this, {10, 10}, m_canvas.get(), uiContext.get());
+	uiPath = new MapDialogPath(this, {10, 10}, world.get(), m_canvas.get(), uiContext.get());
 
 	// Loads the default map
 	bool loadDefault = true;

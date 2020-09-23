@@ -30,8 +30,6 @@
 
 #include "engine.h"
 
-
-
 #include <glm/glm.hpp>
 #include <vector>
 
@@ -39,7 +37,7 @@ namespace traffic
 {
     // ---- Forward declarations ---- //
     class OSMSegment;
-    class Word;
+    class World;
     class Route;
 
     // ---- Plane to Sphere ---- //
@@ -58,7 +56,17 @@ namespace traffic
     glm::dvec2 planeToSphere(glm::dvec2 latLon, glm::dvec2 center);
     glm::dvec2 planeToSphere(glm::dvec2 latLon);
     
+    /// <summary>
+    /// Calculates the distance between two spherical coordinates (lat, lon) by using
+    /// the Haversine formula.
+    /// </summary>
+    /// <param name="p1"></param>
+    /// <param name="p2"></param>
+    /// <param name="radius"></param>
+    /// <returns></returns>
     double distance(glm::dvec2 p1, glm::dvec2 p2, double radius=6372.8);
+    double simpleDistance(glm::dvec2 p1, glm::dvec2 p2);
+    double simpleDistanceSquared(glm::dvec2 p1, glm::dvec2 p2);
 
     // ---- Sphere to Plane ---- //
 

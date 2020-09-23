@@ -39,6 +39,12 @@ Point::Point(Distance distance)
 Point::Point(prec_t _lat, prec_t _lon)
 	: lat(_lat), lon(_lon) { }
 
+traffic::Point::Point(glm::vec2 vec)
+	: lat(vec.x), lon(vec.y) { }
+
+traffic::Point::Point(glm::dvec2 vec)
+	: lat(vec.x), lon(vec.y) { }
+
 prec_t Point::getLatitude() const { return lat; }
 prec_t Point::getLongitude() const { return lon; }
 

@@ -25,8 +25,10 @@
 
 #include "engine.h"
 
+#include "osm_mesh.h"
 #include "osm_graph.h"
 
+#include <chrono>
 #include <limits>
 #include <queue>
 
@@ -43,27 +45,33 @@ using namespace std;
 /// the location from which the node was discovered. It also holds a distance specifying
 /// the total distance from the source.
 /// </summary>
+template<typename ParentType>
 class BufferedNode
 {
 public:
 	BufferedNode() = default;
-	BufferedNode(GraphNode* node, BufferedNode* previous, prec_t distance, bool visited);
+	BufferedNode(ParentType* node, BufferedNode<ParentType>* previous, prec_t distance, bool visited);
 
 	// ---- Member definitions ---- //
-	GraphNode* node;
-	BufferedNode* previous;
+	ParentType* node;
+	BufferedNode<ParentType>* previous;
 	prec_t distance;
+	prec_t heuristic;
 	bool visited;
 };
 
-BufferedNode::BufferedNode(
-	GraphNode *pNode, BufferedNode *pPrevious, prec_t pDistance, bool pVisited)
+template<typename ParentType>
+BufferedNode<ParentType>::BufferedNode(
+	ParentType*pNode, BufferedNode *pPrevious, prec_t pDistance, bool pVisited)
 {
 	this->node = pNode;
 	this->previous = pPrevious;
 	this->distance = pDistance;
 	this->visited = pVisited;
 }
+
+using BufferedGraphNode = BufferedNode<GraphNode>;
+using BufferedFastNode = BufferedNode<FastGraphNode>;
 
 // ---- GraphNode ---- //
 
@@ -85,7 +93,7 @@ size_t traffic::GraphNode::getSize() const
 	return sizeof(*this) + getManagedSize();
 }
 
-vec2 GraphNode::getPosition() const { return vec2(lon, lat); }
+vec2 GraphNode::getPosition() const { return vec2(lat, lon); }
 prec_t GraphNode::getLatitude() const { return lat; }
 prec_t GraphNode::getLongitude() const { return lon; }
 
@@ -136,7 +144,7 @@ Graph::Graph(const shared_ptr<OSMSegment>& xmlmap)
 				if (lastID != -1)
 				{
 					size_t lastIndex = graphMap[lastID];
-					prec_t distance = (prec_t)glm::distance(
+					prec_t distance = (prec_t)simpleDistance(
 						xmlmap->getNode(lastID).asVector(),
 						xmlmap->getNode(currentID).asVector());
 					graphBuffer[currentIndex].connections.push_back(GraphEdge(lastID, distance));
@@ -151,7 +159,7 @@ Graph::Graph(const shared_ptr<OSMSegment>& xmlmap)
 				{
 					size_t currentIndex = graphMap[currentID];
 					size_t lastIndex = graphMap[lastID];
-					prec_t distance = (prec_t)glm::distance(
+					prec_t distance = (prec_t)simpleDistance(
 						xmlmap->getNode(lastID).asVector(),
 						xmlmap->getNode(currentID).asVector());
 					graphBuffer[currentIndex].connections.push_back(GraphEdge(lastID, distance));
@@ -163,11 +171,26 @@ Graph::Graph(const shared_ptr<OSMSegment>& xmlmap)
 	}
 }
 
+void traffic::Graph::optimize()
+{
+	fastGraph = std::make_unique<FastGraph>(*this);
+}
+
 Route Graph::findRoute(int64_t start, int64_t goal)
 {
+	int64_t startIndex = findNodeIndex(start);
+	int64_t stopIndex = findNodeIndex(goal);
+	if (startIndex == -1 || stopIndex == -1) {
+		printf("Could not find start/goal indices\n");
+	}
+
+	if (fastGraph) {
+		return fastGraph->findRoute(startIndex, stopIndex);
+	}
+
 	// Initializes the buffered data using an empty list
 	size_t nodeCount = graphBuffer.size();
-	vector<BufferedNode> nodes(nodeCount);
+	vector<BufferedGraphNode> nodes(nodeCount);
 	for (size_t i = 0; i < nodeCount; i++) {
 		nodes[i].distance = std::numeric_limits<double>::max();
 		nodes[i].visited = false;
@@ -176,12 +199,12 @@ Route Graph::findRoute(int64_t start, int64_t goal)
 	}
 
 	// defines the min priority queue
-	auto cmp = [](const BufferedNode* left, const BufferedNode* right)
+	auto cmp = [](const BufferedGraphNode* left, const BufferedGraphNode* right)
 		{ return left->distance > right->distance; };
-	priority_queue<BufferedNode*,
-		vector<BufferedNode*>, decltype(cmp)> queue(cmp);
+	priority_queue<BufferedGraphNode*,
+		vector<BufferedGraphNode*>, decltype(cmp)> queue(cmp);
 
-	size_t startIndex = graphMap[start];
+	//size_t startIndex = graphMap[start];
 	nodes[startIndex].distance = 0;
 	queue.push(&(nodes[startIndex]));
 
@@ -193,7 +216,7 @@ Route Graph::findRoute(int64_t start, int64_t goal)
 			return Route();
 
 		// Takes the first element
-		BufferedNode* currentNode = queue.top();
+		BufferedGraphNode* currentNode = queue.top();
 		queue.pop();
 
 
@@ -216,7 +239,7 @@ Route Graph::findRoute(int64_t start, int64_t goal)
 			size_t nodeIndex = graphMap[connections[i].goal];
 
 			// Checks if the node was already visited
-			BufferedNode* nextNode = &(nodes[nodeIndex]);
+			BufferedGraphNode* nextNode = &(nodes[nodeIndex]);
 			if (nextNode->visited) continue;
 
 			// Updates the distance
@@ -254,6 +277,22 @@ const GraphNode& Graph::findNodeByID(int64_t id) const {
 int64_t Graph::findNodeIndex(int64_t id) const {
 	auto it = graphMap.find(id);
 	return graphMap.end() == it ? -1 : it->second;
+}
+
+GraphNode& traffic::Graph::findClosestNode(const Point &p)
+{
+	size_t bestIndex = 0;
+	double bestDistance = std::numeric_limits<double>::max();
+	for (size_t i = 0; i < graphBuffer.size(); i++) {
+		double newDistance = traffic::distance(
+			graphBuffer[i].getPosition(), p.toVec());
+		//printf("Distance = %f %f %f\n", newDistance, graphBuffer[i].getLatitude(), graphBuffer[i].getLongitude());
+		if (newDistance < bestDistance) {
+			bestIndex = i;
+			bestDistance = newDistance;
+		}
+	}
+	return graphBuffer[bestIndex];
 }
 
 graphmap_t& Graph::getMap() { return graphMap; }
@@ -349,3 +388,112 @@ size_t traffic::Graph::getSize() const
 {
 	return size_t();
 }
+
+FastGraph::FastGraph(const Graph& graph)
+{
+	const std::vector<GraphNode> &buf = graph.getBuffer();
+	// reserves the needed capacity
+	graphBuffer.resize(buf.size());
+	
+	for (size_t i = 0; i < buf.size(); i++) {
+		FastGraphNode node(buf[i].nodeID, buf[i].lat, buf[i].lon);
+		for (size_t k = 0; k < buf[i].connections.size(); k++) {
+			node.connections.resize(buf[i].connections.size());
+
+			int64_t goalIndex = graph.findNodeIndex(buf[i].connections[k].goal);
+			if (goalIndex == -1) {
+				printf("Could not find goalIndex!");
+				continue;
+			}
+
+			node.connections[k] = FastGraphEdge(
+				static_cast<size_t>(goalIndex),
+				buf[i].connections[k].weight
+			);
+		}
+		graphBuffer[i] = std::move(node);
+	}
+}
+
+Route traffic::FastGraph::findRoute(size_t start, size_t goal)
+{
+	auto begin = std::chrono::steady_clock::now();
+
+	// Initializes the buffered data using an empty list
+	size_t nodeCount = graphBuffer.size();
+	vector<BufferedFastNode> nodes(nodeCount);
+	for (size_t i = 0; i < nodeCount; i++) {
+		nodes[i].distance = std::numeric_limits<double>::max();
+		nodes[i].visited = false;
+		nodes[i].previous = nullptr;
+		nodes[i].node = &(graphBuffer[i]);
+		nodes[i].heuristic = simpleDistance(
+			glm::dvec2(graphBuffer[i].lat, graphBuffer[i].lon),
+			glm::dvec2(graphBuffer[goal].lat, graphBuffer[goal].lon));
+	}
+
+	// Defines a min priority queue
+	auto cmp = [](const BufferedFastNode* left, const BufferedFastNode* right)
+	{ return left->distance + left->heuristic > right->distance + right->heuristic; };
+	priority_queue<BufferedFastNode*, vector<BufferedFastNode*>,
+		decltype(cmp)> queue(cmp);
+
+	prec_t maxDistance = nodes[start].heuristic * 3;
+	// Adds the starting node to the queue.
+	nodes[start].distance = 0;
+	queue.push(&(nodes[start]));
+
+	while (true) {
+		// All possible connections where searched and the goal was not found.
+		// This means that there is not a possible way to reach the destination node.
+		if (queue.empty())
+			return Route();
+
+		// Takes the element with the highest priority from the queue
+		BufferedFastNode* currentNode = queue.top();
+		if (currentNode->distance > maxDistance)
+			return Route();
+		queue.pop();
+
+		// Checks the goal condition. Starts the backpropagation
+		// algorithm if the goal was found to output the shortest route.
+		if (currentNode->node->nodeID == graphBuffer[goal].nodeID) {
+			Route route;
+			do {
+				route.addNode(currentNode->node->nodeID);
+				currentNode = currentNode->previous;
+			} while (currentNode->node->nodeID != graphBuffer[start].nodeID);
+
+			auto end = std::chrono::steady_clock::now();
+			std::cout << "Time difference = " << std::chrono::duration_cast<
+				std::chrono::nanoseconds>(end - begin).count() << "[ns]" << std::endl;
+			return route;
+		}
+
+		auto& connections = currentNode->node->connections;
+		for (size_t i = 0; i < connections.size(); i++) {
+			// Checks if the node was already visited
+			BufferedFastNode* nextNode = &(nodes[connections[i].goal]);
+			if (!nextNode->visited) {
+				// Calculates the total distance to this node
+				prec_t newDistance = currentNode->distance + connections[i].weight;
+				if (newDistance < nextNode->distance) {
+					nextNode->distance = newDistance;
+					nextNode->previous = currentNode;
+				}
+
+				// Adds the node to the list of nodes that need to be visited.
+				// The node will be visited in one of the next iterations
+				queue.push(nextNode);
+			}
+		}
+
+		currentNode->visited = true;
+	}
+}
+
+FastGraphEdge::FastGraphEdge(size_t goal, prec_t weight)
+	: goal(goal), weight(weight) { }
+
+FastGraphNode::FastGraphNode(int64_t nodeID, prec_t lat, prec_t lon)
+	: nodeID(nodeID), lat(lat), lon(lon) { }

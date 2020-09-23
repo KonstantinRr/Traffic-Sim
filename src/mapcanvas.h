@@ -24,6 +24,7 @@
 /// July 2020
 
 #include "traffic/engine.h"
+#include "engine/shader.hpp"
 
 #include <nanogui/screen.h>
 #include <nanogui/layout.h>
@@ -90,47 +91,6 @@ inline Vector4d toView(const glm::dvec4& value) { return Vector4d(value.x, value
 inline Vector3d toView(const glm::dvec3& value) { return Vector3d(value.x, value.y, value.z); }
 inline Vector2d toView(const glm::dvec2& value) { return Vector2d(value.x, value.y); }
 
-class Mesh {
-public:
-	int modelID;
-	size_t size;
-public:
-	Mesh();
-	Mesh(int modelID, size_t size);
-	
-};
-
-class MultiPassShader : public nanogui::Shader {
-protected:
-	int lastID = 0;
-	std::unordered_map<std::string, Buffer> k_empty;
-	std::unordered_map<int,
-		std::unordered_map<std::string, Buffer>> k_buffers;
-	
-public:
-	void set_buffer(int id,
-		const std::string &name, nanogui::VariableType type, size_t ndim,
-        const size_t *shape, const void *data);
-	void set_buffer(int id,
-		const std::string &name, nanogui::VariableType type,
-		std::initializer_list<size_t> shape, const void *data);
-
-	int gen_id();
-	void load(int id);
-
-	MultiPassShader(nanogui::RenderPass *render_pass,
-       const std::string &name,
-       const std::string &vertex_shader,
-       const std::string &fragment_shader,
-       Shader::BlendMode blend_mode = Shader::BlendMode::None);
-
-	//Buffer& getBuffer(const std::string &uniform);
-	//void setBuffer(const std::string &uniform, const Buffer& buffer);
-};
-
-struct ShaderPass {
-	
-};
 
 class MapContextDialog : public nanogui::Window {
 public:
@@ -191,7 +151,7 @@ protected:
 class MapDialogPath : public nanogui::FormHelper {
 public:
 	MapDialogPath(nanogui::Screen *parent, Vector2i pos,
-		MapCanvas *canvas, MapContextDialog *contextMenu);
+		traffic::World *world, MapCanvas *canvas, MapContextDialog *contextMenu);
 
 	void clear();
 	void setStart(Vector2d start);
@@ -201,6 +161,7 @@ public:
 
 protected:
 	MapCanvas* m_canvas = nullptr;
+	traffic::World *m_world = nullptr;
 	MapContextDialog *k_context = nullptr;
 	nanogui::ref<nanogui::Window> m_window = nullptr;
 
@@ -247,6 +208,9 @@ public:
 
 	void loadMap(std::shared_ptr<traffic::OSMSegment> map);
 	void loadHighwayMap(std::shared_ptr<traffic::OSMSegment> map);
+	void loadRoute(const traffic::Route &route, std::shared_ptr<traffic::OSMSegment> map);
+	void clearRoutes();
+
 	bool hasMap() const;
 
 	// ---- Events ---- //
@@ -293,6 +257,8 @@ public:
 	Matrix3f transformPlaneToView3D() const;
 	Matrix4f transformPlaneToView4D() const;
 
+	glm::mat3 transformPlaneToView4DGLM() const;
+
 	void setActive(bool active);
 	
 	// ---- Callbacks ---- //
@@ -308,11 +274,10 @@ protected:
 	// ---- Mesh access ---- //
 	void clearMesh();
 
-	Mesh genMeshFromMap(const traffic::OSMSegment &seg);
-	Mesh genMesh(
-		const std::vector<glm::vec3>& colors,
-		const std::vector<glm::vec2>& points);
-
+	std::shared_ptr<Transformed4DEntity2D> genMeshFromMap(
+		const traffic::OSMSegment &seg, glm::vec3 color);
+	std::shared_ptr<Transformed4DEntity2D> genMesh(
+		std::vector<glm::vec2> &&points, std::vector<glm::vec3> &&colors);
 
 	void setChunkMesh(
 		const std::vector<glm::vec2>& points);
@@ -331,9 +296,6 @@ protected:
 
 	// ---- Member variables ---- //
 
-	Mesh mesh_chunk;
-	Mesh mesh_map, mesh_highway;
-
 	Listener<void(Vector2d)> m_cb_leftclick;
 	Listener<void(Vector2d)> m_cb_rightclick;
 	Listener<void(Vector2d)> m_cb_map_moved;
@@ -342,12 +304,19 @@ protected:
 	Listener<void(double)> m_cb_zoom_changed;
 	Listener<void(double)> m_cb_rotation_changed;
 
-	nanogui::ref<MultiPassShader> m_shader;
-	nanogui::ref<MultiPassShader> m_chunk_shader;
+
+	std::shared_ptr<Transformed4DEntity2D> l_mesh_map, l_mesh_highway;
+	std::vector<std::shared_ptr<Transformed4DEntity2D>> l_mesh_routes;
+
+	std::shared_ptr<lt::render::shader::LineMemoryShader> l_shader;
+	std::shared_ptr<lt::render::shader::RenderList<Entity2D>> entities;
+	std::shared_ptr<lt::render::shader::RenderComponent<
+		lt::render::shader::LineStageBuffer,
+		lt::render::shader::LineMemoryShader>> l_comp;
+	lt::render::shader::RenderPipeline l_pipeline;
 
 	std::shared_ptr<traffic::OSMSegment> m_map;
 	std::shared_ptr<traffic::OSMSegment> m_highway_map;
-
 
 	bool m_active;
 	bool m_success;

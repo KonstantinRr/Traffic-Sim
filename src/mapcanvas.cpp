@@ -34,58 +34,6 @@
 using namespace traffic;
 using namespace glm;
 
-MultiPassShader::MultiPassShader(nanogui::RenderPass *render_pass,
-   const std::string &name,
-   const std::string &vertex_shader,
-   const std::string &fragment_shader,
-   Shader::BlendMode blend_mode)
-   : nanogui::Shader(render_pass, name, vertex_shader, fragment_shader, blend_mode)
-{
-	k_empty = m_buffers;
-}
-
-void MultiPassShader::set_buffer(int id,
-	const std::string& name, nanogui::VariableType type, size_t ndim,
-	const size_t* shape, const void* data)
-{
-	Shader::set_buffer(name, type, ndim, shape, data);
-	k_buffers[id][name] = m_buffers[name]; // instance storage
-	m_buffers[name] = k_empty[name]; // erase to default value
-}
-
-void MultiPassShader::set_buffer(int id,
-	const std::string &name, nanogui::VariableType type,
-	std::initializer_list<size_t> shape, const void *data)
-{
-	Shader::set_buffer(name, type, shape, data);	
-	k_buffers[id][name] = m_buffers[name]; // instance storage
-	m_buffers[name] = k_empty[name]; // erase to default value
-}
-
-void MultiPassShader::load(int id) {
-	auto it = k_buffers.find(id);
-	if (it != k_buffers.end()) {
-		m_buffers = it->second;
-	}
-	else {
-		printf("COULD NOT FIND ID %d\n", id);
-	}
-}
-
-int MultiPassShader::gen_id() {
-	k_buffers[lastID] = k_empty;
-	return lastID++;
-}
-
-/*
-MultiPassShader::Buffer& MultiPassShader::getBuffer(const std::string &uniform) {
-	return 
-}
-void MultiPassShader::setBuffer(const std::string &uniform, const Buffer& buffer) {
-
-}
-*/
-
 // ---- View Conversion ---- //
 
 nanogui::Matrix4f toView(const glm::mat4& value)
@@ -126,17 +74,20 @@ MapCanvas::MapCanvas(Widget* parent,
 	if (world) loadMap(world);
 	else resetView();
 
+	// custom shader
+	using namespace lt::render::shader;
 	try {
-		// Defines the used shaders
-		m_chunk_shader = new MultiPassShader(
-			render_pass(), "shader_chunk",
-			getChunkVertex(), getChunkFragment());
-		m_shader = new MultiPassShader(
-			render_pass(), "shader_map",
-			getLineVertex(), getLineFragment());
+		l_shader = std::make_shared<LineMemoryShader>();
+		entities = std::make_shared<RenderList<Entity2D>>();
+		l_comp = std::make_shared<RenderComponent< LineStageBuffer, LineMemoryShader>>();
+		
+		l_shader->create();
+		l_comp->setShader(l_shader);
+		l_comp->stageBuffer().renderList = entities;
+		l_pipeline.addStage(l_comp);
 		m_success = true;
-	} catch ( ... ) {
-		//printf("%s\n", e.what());
+	}
+	catch (...) {
 		m_success = false;
 	}
 }
@@ -252,7 +203,7 @@ void MapCanvas::loadMap(std::shared_ptr<traffic::OSMSegment> map)
 {
 	if (map) {
 		m_map = map;
-		mesh_map = genMeshFromMap(*map);
+		l_mesh_map = genMeshFromMap(*map, { 1.0f, 1.0f, 1.0f});
 		resetView();
 	}
 }
@@ -261,11 +212,21 @@ void MapCanvas::loadHighwayMap(std::shared_ptr<traffic::OSMSegment> map)
 {
 	if (map) {
 		m_highway_map = map;
-		std::vector<vec2> points = generateMesh(*map);
-		std::vector<vec3> colors(points.size(), glm::vec3(1.0f, 0.0f, 0.0f));
-		mesh_highway = genMesh(colors, points);
+		l_mesh_highway = genMeshFromMap(*map, { 1.0f, 0.0f, 0.0f });
 		resetView();
 	}
+}
+
+void MapCanvas::loadRoute(const Route& route, std::shared_ptr<traffic::OSMSegment> map)
+{
+	std::vector<vec2> points = generateRouteMesh(route, *map);
+	std::vector<vec3> colors(points.size(), glm::vec3(0.0f, 0.0f, 1.0f));
+	l_mesh_routes.push_back(genMesh(std::move(points), std::move(colors)));
+}
+
+void MapCanvas::clearRoutes()
+{
+	l_mesh_routes.clear();
 }
 
 
@@ -315,26 +276,8 @@ bool MapCanvas::scroll_event(const Vector2i& p, const Vector2f& rel)
 	return true;
 }
 
-Mesh MapCanvas::genMesh(
-	const std::vector<glm::vec3>& colors,
-	const std::vector<glm::vec2>& points)
-{
-	Mesh ms = Mesh(m_shader->gen_id(), points.size());
-	std::cout << "Generated mesh " << ms.modelID << "\n";
-	m_shader->set_buffer(ms.modelID, "vVertex", nanogui::VariableType::Float32,
-		{ points.size(), 2 }, points.data());
-	m_shader->set_buffer(ms.modelID, "color", nanogui::VariableType::Float32,
-		{ colors.size(), 3 }, colors.data());
-	return ms;
-}
-
 void MapCanvas::setChunkMesh(const std::vector<glm::vec2> &points)
 {
-	if (m_success) {
-		mesh_chunk = Mesh(m_shader->gen_id(), points.size());
-		m_chunk_shader->set_buffer(mesh_chunk.modelID, "vVertex", nanogui::VariableType::Float32,
-			{ points.size(), 2 }, points.data());
-	}
 }
 
 void MapCanvas::setActive(bool active)
@@ -374,17 +317,32 @@ void MapCanvas::update(double dt)
 
 // ---- Mesh ---- //
 
-Mesh MapCanvas::genMeshFromMap(const OSMSegment& seg)
+std::shared_ptr<Transformed4DEntity2D> MapCanvas::genMeshFromMap(
+	const OSMSegment& seg, glm::vec3 color)
 {
 	std::vector<vec2> points = generateMesh(seg);
-	std::vector<vec3> colors(points.size(), glm::vec3(1.0f, 1.0f, 1.0f));
-	return genMesh(colors, points);
+	std::vector<vec3> colors(points.size(), color);
+	return genMesh(std::move(points), std::move(colors));
 }
 
-void MapCanvas::clearMesh()
+std::shared_ptr<Transformed4DEntity2D> MapCanvas::genMesh(
+	std::vector<glm::vec2>&& points, std::vector<glm::vec3>&& colors)
 {
-	mesh_chunk = Mesh();
-	mesh_map = Mesh();
+	lt::resource::MeshBuilder2D builder;
+	builder.setVertices(std::move(points));
+	builder.setColors(std::move(colors));
+	auto exp = builder.exporter()
+		.addVertex().addColor()
+		.exportData();
+
+	std::shared_ptr<GLModel> model = std::make_shared<GLModel>(exp);
+	return std::make_shared<Transformed4DEntity2D>(0, model);
+}
+
+void MapCanvas::clearMesh() {
+	l_mesh_highway = nullptr;
+	l_mesh_map = nullptr;
+	l_mesh_routes.clear();
 }
 
 Vector2d MapCanvas::windowToView(Vector2i vec) const {
@@ -461,37 +419,36 @@ Matrix4f MapCanvas::transformPlaneToView4D() const {
 		Vector3f(m_zoom, m_zoom * width() / height(), 1.0f));
 	return scale * rotation * translate;
 }
+glm::mat3 MapCanvas::transformPlaneToView4DGLM() const {
+	glm::mat3 mat(1.0f);
+	mat = glm::translate(mat, glm::vec2(-position.x(), -position.y()));
+	mat = glm::rotate(mat, (float)m_rotation);
+	mat = glm::scale(mat, glm::vec2(m_zoom, m_zoom * width() / height()));
+	return mat;
+}
 
 void MapCanvas::draw_contents()
 {
 	using namespace nanogui;
 	if (m_active && m_success && hasMap()) {
 		auto transform = transformPlaneToView4D();
-	
 		// Chunk rendering
 		if (m_render_chunk)
 		{
-			//m_chunk_shader->set_buffer
-			m_chunk_shader->set_uniform("mvp", transform);
-			m_chunk_shader->set_uniform("color", Vector4f(1.0f, 0.0f, 0.0f, 1.0f));
-			m_chunk_shader->begin();
-			m_chunk_shader->load(mesh_chunk.modelID);
-			m_chunk_shader->draw_array(Shader::PrimitiveType::Line, 0, mesh_chunk.size, false);
-			m_chunk_shader->end();
+
 		}
-
-		// renders the 
-		m_shader->load(mesh_map.modelID);
-		m_shader->set_uniform("mvp", transform);
-		m_shader->begin();
-		m_shader->draw_array(Shader::PrimitiveType::Line, 0, mesh_map.size, false);
-
-		m_shader->load(mesh_highway.modelID);
-		m_shader->set_uniform("mvp", transform);
-		m_shader->begin();
-		m_shader->draw_array(Shader::PrimitiveType::Line, 0, mesh_highway.size, false);
-
-		m_shader->end();
+		
+		
+		entities->clear();
+		for (const auto& t : l_mesh_routes) {
+			t->setTransform4D(toGLM(transform));
+			entities->add(t);
+		}
+		l_mesh_map->setTransform4D(toGLM(transform));
+		l_mesh_highway->setTransform4D(toGLM(transform));
+		entities->add(l_mesh_map);
+		entities->add(l_mesh_highway);
+		l_pipeline.render();
 	}
 }
 
@@ -609,6 +566,7 @@ MapInfo::MapInfo(nanogui::Screen* parent, Vector2i pos,
 			m_world->loadMap(file);
 			if (m_canvas) {
 				m_canvas->loadMap(m_world->getMap());
+				m_canvas->loadHighwayMap(m_world->getHighwayMap());
 			}
 		}
 	});
@@ -630,7 +588,7 @@ MapCanvas* MapInfo::getCanvas() const noexcept { return m_canvas; }
 void MapInfo::setCanvas(MapCanvas* canvas) { m_canvas = canvas; }
 
 MapDialogPath::MapDialogPath(
-	nanogui::Screen* parent, Vector2i pos, MapCanvas* canvas, MapContextDialog *contextMenu)
+	nanogui::Screen* parent, Vector2i pos, World *world, MapCanvas* canvas, MapContextDialog *contextMenu)
 	: nanogui::FormHelper(parent)
 {
 	clear();
@@ -638,6 +596,7 @@ MapDialogPath::MapDialogPath(
 	set_fixed_size(Vector2i(100, 20));
 	m_window = add_window(pos, "Position panel");
 	m_canvas = canvas;
+	m_world = world;
 	k_context = contextMenu;
 
 	add_group("Start");
@@ -650,7 +609,18 @@ MapDialogPath::MapDialogPath(
 		[this](double val) { },
 		[this]() { return m_canvas ?
 			m_canvas->getDistance(getStart(), getStop()) : 0.0; }, false);
-	add_button("Calculate Path", [this](){});
+	add_button("Calculate Path", [this](){
+		auto& graph = m_world->getGraph();
+		GraphNode& idStart = graph->findClosestNode(Point(m_start_lat, m_start_lon));
+		GraphNode& idStop = graph->findClosestNode(Point(m_stop_lat, m_stop_lon));
+		std::cout << "Searching route from " << idStart.nodeID << " " << idStop.nodeID << "\n";
+		Route r = graph->findRoute(idStart.nodeID, idStop.nodeID);
+		for (int64_t id : r.nodes) {
+			std::cout << "Node: " << id << "\n";
+		}
+		m_canvas->loadRoute(r, graph->getXMLMap());
+
+	});
 
 	if (k_context)
 	{
@@ -732,12 +702,3 @@ void MapContextDialog::addContextButton(
 
 Listener<void()>& MapContextDialog::openListener() { return k_listener_open; }
 Listener<void()>& MapContextDialog::closeListener() { return k_listener_close; }
-
-Mesh::Mesh() : modelID(-1), size(0)
-{
-}
-
-Mesh::Mesh(int modelID, size_t size)
-	: modelID(modelID), size(size)
-{
-}

@@ -114,6 +114,16 @@ double traffic::distance(dvec2 p1, dvec2 p2, double radius)
         return radius * c; 
 }
 
+double traffic::simpleDistance(glm::dvec2 p1, glm::dvec2 p2)
+{
+	return glm::distance(sphereToPlane(p1), sphereToPlane(p2));
+}
+
+double traffic::simpleDistanceSquared(glm::dvec2 p1, glm::dvec2 p2)
+{
+	return glm::distance(sphereToPlane(p1), sphereToPlane(p2));
+}
+
 // ---- Mesh Generation ---- //
 
 void applyNodes(const std::vector<int64_t> nds, const OSMSegment& map,
@@ -145,9 +155,8 @@ void applyNodes(const std::vector<int64_t> nds, const OSMSegment& map,
 std::vector<vec2> traffic::generateMesh(const OSMSegment& map)
 {
 	std::vector<vec2> points;
-	for (const OSMWay& wd : (*map.getWays())) {
+	for (const OSMWay& wd : (*map.getWays()))
 		applyNodes(wd.getNodes(), map, points);
-	}
 
 	return points;
 }
@@ -179,7 +188,7 @@ std::vector<vec2> traffic::generateChunkMesh(const World& world)
 
 std::vector<glm::vec2> traffic::generateRouteMesh(const Route route, const OSMSegment& map)
 {
-	std::vector<glm::vec2> points(route.nodes.size());
+	std::vector<glm::vec2> points;
 	applyNodes(route.nodes, map, points);
 	return points;
 }

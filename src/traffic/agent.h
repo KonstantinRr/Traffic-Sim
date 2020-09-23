@@ -104,6 +104,8 @@ namespace traffic
         World(ConcurrencyManager *manager);
         World(ConcurrencyManager* manager, const std::shared_ptr<OSMSegment> &map);
 
+        virtual ~World() = default;
+
         // ---- Functions ---- //
         bool hasMap() const noexcept;
         

@@ -136,6 +136,8 @@ void traffic::World::loadMap(const std::shared_ptr<OSMSegment>& map)
     k_highway_map->summary();
 
     m_graph = make_shared<Graph>(k_highway_map);
+    m_graph->checkConsistency();
+    m_graph->optimize();
 }
 
 void traffic::World::loadMap(const std::string& file)

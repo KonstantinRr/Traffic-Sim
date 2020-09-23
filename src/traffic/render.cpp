@@ -48,7 +48,7 @@ void drawNodeList(
 	// does nothing if the list is empty
 	if (nds.empty()) return;
 
-	vector<OSMNode>& nodeList = *(map.getNodes());
+	std::vector<OSMNode>& nodeList = *(map.getNodes());
 	int64_t lastNode = nds[0];
 	for (size_t i = 1; i < nds.size(); i++) {
 		size_t lastNodeID = map.getNodeIndex(lastNode);

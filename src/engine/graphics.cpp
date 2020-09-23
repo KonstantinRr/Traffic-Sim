@@ -23,13 +23,12 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
-#include "engine.h"
-
 #include <random>
 #include <stdlib.h>
 #include <math.h>
 #include <iostream>
 #include <chrono>
+#include <exception>
 
 #include "graphics.hpp"
 
@@ -320,7 +319,7 @@ Image<Pixel, Value> Image<Pixel, Value>::ant(size_t aa)
 {
 	// TODO
 	if (width % aa != 0 || height % aa != 0) {
-		throw runtime_error("Width and height must be divisible by aa");
+		throw std::runtime_error("Width and height must be divisible by aa");
 	}
 	size_t newWidth = width / aa;
 	size_t newHeight = height / aa;
@@ -492,7 +491,7 @@ Image<Pixel, Value> Image<Pixel, Value>::exportImage(const ImgRect &rect) const 
 
 template<template <class> class Pixel, class Value>
 Image<Pixel, Value> Image<Pixel, Value>::copy() {
-	vector<Pixel<Value>> convertData(width * height);
+	std::vector<Pixel<Value>> convertData(width * height);
 	for (size_t i = 0; i < width * height; i++) {
 		convertData[i] = data[i];
 	}

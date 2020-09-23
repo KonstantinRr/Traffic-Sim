@@ -28,14 +28,12 @@
 #ifndef GRAPHICS_HPP
 #define GRAPHICS_HPP
 
-#include "engine.h"
-
 #include <vector>
 #include <array>
 #include <limits>
 
 namespace lt {
-	using namespace std;
+	using prec_t = float;
 
 	/// The general color type that encodes colors using
 	/// floating value types.
@@ -139,14 +137,14 @@ namespace lt {
 	};
 
 	// floating point color limits //
-	template<> struct ColorLimits<float32> {
-		static float32 max() { return 1.0f; }
-		static float32 min() { return 0.0f; }
+	template<> struct ColorLimits<float> {
+		static float max() { return 1.0f; }
+		static float min() { return 0.0f; }
 	};
 
-	template<> struct ColorLimits<float64> {
-		static float64 max() { return 1.0; }
-		static float64 min() { return 0.0; }
+	template<> struct ColorLimits<double> {
+		static double max() { return 1.0; }
+		static double min() { return 0.0; }
 	};
 	// Integer color limits //
 	template<> struct ColorLimits<uint8_t> {
@@ -598,7 +596,7 @@ namespace lt {
 		/// stored in a single dimensional array where 2D
 		/// access is simulated.
 		size_t width, height;
-		vector<Pixel<Value>> data;
+		std::vector<Pixel<Value>> data;
 
 		/// Returns whether the rect is contained in this image.
 		bool checkBoundaries(const ImgRect& rect) const;
@@ -614,7 +612,7 @@ namespace lt {
 			this->width = width;
 			this->height = height;
 		}
-		explicit Image(vector<Pixel<Value>> &&imageData, size_t width, size_t height)
+		explicit Image(std::vector<Pixel<Value>> &&imageData, size_t width, size_t height)
 			: data(move(imageData)) {
 			this->width = width;
 			this->height = height;
@@ -623,12 +621,12 @@ namespace lt {
 		template<template <class> class NewPixel, class NewValue>
 		Image<NewPixel, NewValue> convert(const Image<Pixel, Value> &image)
 		{
-			vector<NewPixel<NewValue>> convertData(width * height);
+			std::vector<NewPixel<NewValue>> convertData(width * height);
 			for (size_t i = 0; i < width * height; i++) {
 				convertData[i] = Color(data[i]);
 			}
 			return Image<NewPixel, NewValue>(
-				move(convertData), width, height);
+				std::move(convertData), width, height);
 		} 
 
 		Image(const Image<Pixel, Value> &) = delete;

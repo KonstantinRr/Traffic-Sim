@@ -30,7 +30,7 @@
 
 #include "engine.h"
 
-#include "graphics.hpp"
+#include "../engine/graphics.hpp"
 #include "osm.h"
 #include "osm_graph.h"
 
