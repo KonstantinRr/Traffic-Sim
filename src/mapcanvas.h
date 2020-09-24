@@ -274,9 +274,9 @@ protected:
 	// ---- Mesh access ---- //
 	void clearMesh();
 
-	std::shared_ptr<Transformed4DEntity2D> genMeshFromMap(
+	std::shared_ptr<lt::Transformed4DEntity2D> genMeshFromMap(
 		const traffic::OSMSegment &seg, glm::vec3 color);
-	std::shared_ptr<Transformed4DEntity2D> genMesh(
+	std::shared_ptr<lt::Transformed4DEntity2D> genMesh(
 		std::vector<glm::vec2> &&points, std::vector<glm::vec3> &&colors);
 
 	void setChunkMesh(
@@ -305,15 +305,15 @@ protected:
 	Listener<void(double)> m_cb_rotation_changed;
 
 
-	std::shared_ptr<Transformed4DEntity2D> l_mesh_map, l_mesh_highway;
-	std::vector<std::shared_ptr<Transformed4DEntity2D>> l_mesh_routes;
+	std::shared_ptr<lt::Transformed4DEntity2D> l_mesh_map, l_mesh_highway;
+	std::vector<std::shared_ptr<lt::Transformed4DEntity2D>> l_mesh_routes;
 
-	std::shared_ptr<lt::render::shader::LineMemoryShader> l_shader;
-	std::shared_ptr<lt::render::shader::RenderList<Entity2D>> entities;
-	std::shared_ptr<lt::render::shader::RenderComponent<
-		lt::render::shader::LineStageBuffer,
-		lt::render::shader::LineMemoryShader>> l_comp;
-	lt::render::shader::RenderPipeline l_pipeline;
+	std::shared_ptr<lt::render::LineMemoryShader> l_shader;
+	std::shared_ptr<lt::render::RenderList<lt::Entity2D>> entities;
+	std::shared_ptr<lt::render::RenderComponent<
+		lt::render::LineStageBuffer,
+		lt::render::LineMemoryShader>> l_comp;
+	lt::render::RenderPipeline l_pipeline;
 
 	std::shared_ptr<traffic::OSMSegment> m_map;
 	std::shared_ptr<traffic::OSMSegment> m_highway_map;

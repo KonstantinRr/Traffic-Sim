@@ -149,7 +149,7 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	uiPath = new MapDialogPath(this, {10, 10}, world.get(), m_canvas.get(), uiContext.get());
 
 	// Loads the default map
-	bool loadDefault = false;
+	bool loadDefault = true;
 	if (loadDefault) {
 		world->loadMap("maps/warendorf.xmlmap");
 		m_canvas->loadMap(world->getMap());

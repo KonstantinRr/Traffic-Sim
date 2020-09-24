@@ -75,10 +75,10 @@ MapCanvas::MapCanvas(Widget* parent,
 	else resetView();
 
 	// custom shader
-	using namespace lt::render::shader;
+	using namespace lt::render;
 	try {
 		l_shader = std::make_shared<LineMemoryShader>();
-		entities = std::make_shared<RenderList<Entity2D>>();
+		entities = std::make_shared<RenderList<lt::Entity2D>>();
 		l_comp = std::make_shared<RenderComponent< LineStageBuffer, LineMemoryShader>>();
 		
 		l_shader->create();
@@ -317,7 +317,7 @@ void MapCanvas::update(double dt)
 
 // ---- Mesh ---- //
 
-std::shared_ptr<Transformed4DEntity2D> MapCanvas::genMeshFromMap(
+std::shared_ptr<lt::Transformed4DEntity2D> MapCanvas::genMeshFromMap(
 	const OSMSegment& seg, glm::vec3 color)
 {
 	std::vector<vec2> points = generateMesh(seg);
@@ -325,7 +325,7 @@ std::shared_ptr<Transformed4DEntity2D> MapCanvas::genMeshFromMap(
 	return genMesh(std::move(points), std::move(colors));
 }
 
-std::shared_ptr<Transformed4DEntity2D> MapCanvas::genMesh(
+std::shared_ptr<lt::Transformed4DEntity2D> MapCanvas::genMesh(
 	std::vector<glm::vec2>&& points, std::vector<glm::vec3>&& colors)
 {
 	lt::resource::MeshBuilder2D builder;
@@ -335,8 +335,8 @@ std::shared_ptr<Transformed4DEntity2D> MapCanvas::genMesh(
 		.addVertex().addColor()
 		.exportData();
 
-	std::shared_ptr<GLModel> model = std::make_shared<GLModel>(exp);
-	return std::make_shared<Transformed4DEntity2D>(0, model);
+	auto model = std::make_shared<lt::GLModel>(exp);
+	return std::make_shared<lt::Transformed4DEntity2D>(0, model);
 }
 
 void MapCanvas::clearMesh() {
@@ -446,8 +446,8 @@ void MapCanvas::draw_contents()
 		}
 		l_mesh_map->setTransform4D(toGLM(transform));
 		l_mesh_highway->setTransform4D(toGLM(transform));
-		entities->add(l_mesh_map);
 		entities->add(l_mesh_highway);
+		entities->add(l_mesh_map);
 		l_pipeline.render();
 	}
 }

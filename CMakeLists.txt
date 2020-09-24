@@ -19,14 +19,14 @@ macro(CHECK_CXX_COMPILER_AND_LINKER_FLAGS_BASE _RESULT _CXX_FLAGS _LINKER_FLAGS)
   set(CMAKE_REQUIRED_LIBRARIES "")
 endmacro()
 
+# The project and dependencies rely on the CXX17 standard.
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(NANOGUI_BUILD_EXAMPLES ON CACHE BOOL "Build examples")
-set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL "Build Python")
-set(NANOGUI_BUILD_SHARED OFF CACHE BOOL "Build Shared")
-set(NANOGUI_BUILD_GLAD ON CACHE BOOL "Build GLAD")
-set(SPDLOG_FMT_EXTERNAL ON)
+set(NANOGUI_BUILD_EXAMPLES ON CACHE BOOL "Build examples") # No examples needed
+set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL "Build Python") # No Python bindings are needed (only C++)
+set(NANOGUI_BUILD_SHARED OFF CACHE BOOL "Build Shared") # NanoGUI should be linked static 
+set(SPDLOG_FMT_EXTERNAL ON) # Specifies that FMT is linked external
 
 # All source files in this project
 set(SOURCE
@@ -63,6 +63,10 @@ set(HEADERS
    "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/parser.hpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/render.hpp"
 )
+
+IF (WIN32)
+    add_compile_definitions(NANOGUI_GLAD)
+ENDIF()
 
 # Prefer libc++ in conjunction with Clang
 if (NOT MSVC)
@@ -107,5 +111,5 @@ add_subdirectory(nanogui)
 target_link_libraries(Controller PUBLIC nanogui)
 add_subdirectory(fmt)
 target_link_libraries(Controller PUBLIC fmt::fmt)
-#add_subdirectory(spdlog)
-#target_link_libraries(Controller PRIVATE spdlog::spdlog)
+add_subdirectory(spdlog)
+target_link_libraries(Controller PRIVATE spdlog::spdlog)

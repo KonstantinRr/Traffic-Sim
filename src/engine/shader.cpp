@@ -1,16 +1,17 @@
-/// BEGIN LICENSE
-///
-/// Copyright 2020 Konstantin Rolf <konstantin.rolf@gmail.com>
-/// Permission is hereby granted, free of charge, to any person obtaining a copy of
-/// this software and associated documentation files (the "Software"), to deal in
-/// the Software without restriction, including without limitation the rights to
-/// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-/// of the Software, and to permit persons to whom the Software is furnished to do
-/// so, subject to the following conditions:
-///
+/// MIT License
+/// 
+/// Copyright (c) 2020 Konstantin Rolf
+/// 
+/// Permission is hereby granted, free of charge, to any person obtaining a copy
+/// of this software and associated documentation files (the "Software"), to deal
+/// in the Software without restriction, including without limitation the rights
+/// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+/// copies of the Software, and to permit persons to whom the Software is
+/// furnished to do so, subject to the following conditions:
+/// 
 /// The above copyright notice and this permission notice shall be included in all
 /// copies or substantial portions of the Software.
-///
+/// 
 /// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 /// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 /// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -18,12 +19,14 @@
 /// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE.
-///
-/// END LICENSE
+/// 
+/// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
+/// July 2020
 
 #include <iostream>
 #include <spdlog/spdlog.h>
 #include <glm/gtc/type_ptr.hpp>
+#include <limits>
 
 #include "shader.hpp"
 
@@ -31,11 +34,39 @@
 
 using namespace lt;
 using namespace lt::render;
-using namespace lt::render::shader;
 using namespace lt::resource;
 
-Shader::Shader(bool hasVertexShader, bool hasFragmentShader)
-    : hasVertexShader(hasVertexShader), hasFragmentShader(hasFragmentShader) { }
+ShaderBase::ShaderBase(bool hasVertexShader, bool hasFragmentShader)
+    : hasVertexShader(hasVertexShader),
+    hasFragmentShader(hasFragmentShader),
+    program(std::numeric_limits<GLuint>::max())
+{
+}
+
+ShaderBase::ShaderBase(ShaderBase&& sh)
+    : hasFragmentShader(std::exchange(sh.hasFragmentShader, false))
+    , hasVertexShader(std::exchange(sh.hasVertexShader, false))
+    , program(std::exchange(sh.program, std::numeric_limits<GLuint>::max()))
+{
+}
+
+ShaderBase& ShaderBase::operator=(ShaderBase&& sh)
+{
+    cleanUp();
+    hasFragmentShader = std::exchange(sh.hasFragmentShader, false);
+    hasVertexShader = std::exchange(sh.hasVertexShader, false);
+    program = std::exchange(sh.program, std::numeric_limits<GLuint>::max());
+    return *this;
+}
+
+ShaderBase::~ShaderBase() { cleanUp(); }
+void ShaderBase::cleanUp()
+{
+    if (program != std::numeric_limits<GLuint>::max() && glIsProgram(program)) {
+        glDeleteProgram(program);
+        program = std::numeric_limits<GLuint>::max();
+    }
+}
 
 void showShaderLog(GLuint shader) {
     spdlog::info("Could not link Shader!");
@@ -57,12 +88,12 @@ void showInfoLog(GLuint program) {
     spdlog::error("ERROR::SHADER::PROGRAM::LINKING_FAILED\n{}", errorLog.data());
 }
 
-void Shader::cleanup(GLuint vertex_shader, GLuint fragment_shader) {
+void ShaderBase::cleanupParts(GLuint vertex_shader, GLuint fragment_shader) {
     if (hasVertexShader) CGL(glDeleteShader(vertex_shader));
     if (hasFragmentShader) CGL(glDeleteShader(fragment_shader));
 }
 
-void Shader::create() {
+void ShaderBase::create() {
     int success;
 
     program = glCreateProgram();
@@ -82,7 +113,7 @@ void Shader::create() {
         CGL(glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success));
         if(!success) {
             showShaderLog(vertex_shader);
-            cleanup(vertex_shader, fragment_shader);
+            cleanupParts(vertex_shader, fragment_shader);
             throw std::runtime_error("Could not load vertex shader");
         }
     }
@@ -101,7 +132,7 @@ void Shader::create() {
         CGL(glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success));
         if(!success) {
             showShaderLog(fragment_shader);
-            cleanup(vertex_shader, fragment_shader);
+            cleanupParts(vertex_shader, fragment_shader);
             throw std::runtime_error("Could not load fragment shader");
         };
     }
@@ -110,60 +141,60 @@ void Shader::create() {
     CGL(glGetProgramiv(program, GL_LINK_STATUS, &success));
     if(!success) {
         showInfoLog(program);
-        cleanup(vertex_shader, fragment_shader);
+        cleanupParts(vertex_shader, fragment_shader);
         throw std::runtime_error("Could not link shader");
     }
 
-    cleanup(vertex_shader, fragment_shader);
+    cleanupParts(vertex_shader, fragment_shader);
     spdlog::info("Shaders successfully linked");
     initializeUniforms();
     spdlog::info("Uniforms successfully loaded");
 }
 
-void Shader::bind() {
+void ShaderBase::bind() {
     CGL(glUseProgram(program));
 }
 
-void Shader::release() {
+void ShaderBase::release() {
     CGL(glUseProgram(0));
 }
 
-void Shader::loadFloat(GLint location, float value) { CGL(glUniform1f(location, value)); }
-void Shader::loadBool(GLint location, bool value) { CGL(glUniform1i(location, value)); }
-void Shader::loadInt(GLint location, int value) { CGL(glUniform1i(location, value)); }
+void ShaderBase::loadFloat(GLint location, float value) { CGL(glUniform1f(location, value)); }
+void ShaderBase::loadBool(GLint location, bool value) { CGL(glUniform1i(location, value)); }
+void ShaderBase::loadInt(GLint location, int value) { CGL(glUniform1i(location, value)); }
 
-void Shader::loadVec1(GLint location, const glm::vec1 &vec) { CGL(glUniform1f(location, vec.x)); }
-void Shader::loadVec2(GLint location, const glm::vec2 &vec) { CGL(glUniform2f(location, vec.x, vec.y)); }
-void Shader::loadVec3(GLint location, const glm::vec3 &vec) { CGL(glUniform3f(location, vec.x, vec.y, vec.y)); }
-void Shader::loadVec4(GLint location, const glm::vec4 &vec) { CGL(glUniform4f(location, vec.x, vec.y, vec.z, vec.w)); }
+void ShaderBase::loadVec1(GLint location, const glm::vec1 &vec) { CGL(glUniform1f(location, vec.x)); }
+void ShaderBase::loadVec2(GLint location, const glm::vec2 &vec) { CGL(glUniform2f(location, vec.x, vec.y)); }
+void ShaderBase::loadVec3(GLint location, const glm::vec3 &vec) { CGL(glUniform3f(location, vec.x, vec.y, vec.y)); }
+void ShaderBase::loadVec4(GLint location, const glm::vec4 &vec) { CGL(glUniform4f(location, vec.x, vec.y, vec.z, vec.w)); }
 
-void Shader::loadMat2x2(GLint location, const glm::mat2x2 &mat) { CGL(glUniformMatrix2fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
-void Shader::loadMat2x3(GLint location, const glm::mat2x3 &mat) { CGL(glUniformMatrix2x3fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
-void Shader::loadMat2x4(GLint location, const glm::mat2x4 &mat) { CGL(glUniformMatrix2x4fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
+void ShaderBase::loadMat2x2(GLint location, const glm::mat2x2 &mat) { CGL(glUniformMatrix2fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
+void ShaderBase::loadMat2x3(GLint location, const glm::mat2x3 &mat) { CGL(glUniformMatrix2x3fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
+void ShaderBase::loadMat2x4(GLint location, const glm::mat2x4 &mat) { CGL(glUniformMatrix2x4fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
 
-void Shader::loadMat3x2(GLint location, const glm::mat3x2 &mat) { CGL(glUniformMatrix3x2fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
-void Shader::loadMat3x3(GLint location, const glm::mat3x3 &mat) { CGL(glUniformMatrix3fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
-void Shader::loadMat3x4(GLint location, const glm::mat3x4 &mat) { CGL(glUniformMatrix3x4fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
+void ShaderBase::loadMat3x2(GLint location, const glm::mat3x2 &mat) { CGL(glUniformMatrix3x2fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
+void ShaderBase::loadMat3x3(GLint location, const glm::mat3x3 &mat) { CGL(glUniformMatrix3fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
+void ShaderBase::loadMat3x4(GLint location, const glm::mat3x4 &mat) { CGL(glUniformMatrix3x4fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
 
-void Shader::loadMat4x2(GLint location, const glm::mat4x2 &mat) { CGL(glUniformMatrix4x2fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
-void Shader::loadMat4x3(GLint location, const glm::mat4x3 &mat) { CGL(glUniformMatrix4x3fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
-void Shader::loadMat4x4(GLint location, const glm::mat4x4 &mat) { CGL(glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
+void ShaderBase::loadMat4x2(GLint location, const glm::mat4x2 &mat) { CGL(glUniformMatrix4x2fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
+void ShaderBase::loadMat4x3(GLint location, const glm::mat4x3 &mat) { CGL(glUniformMatrix4x3fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
+void ShaderBase::loadMat4x4(GLint location, const glm::mat4x4 &mat) { CGL(glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(mat))); }
 
 
-GLint Shader::uniformLocation(const std::string &name) {
+GLint ShaderBase::uniformLocation(const std::string &name) {
     GLint v = glGetUniformLocation(program, name.c_str());
     //if (v == -1) throw std::runtime_error("Could not load uniform " + name);
     return v;
 }
 
-GLuint Shader::getShaderID() {
+GLuint ShaderBase::getShaderID() {
     return program;
 }
 
-// ---- Resource Shader ----
+// ---- Resource ShaderBase ----
 
 ResourceShader::ResourceShader(bool hasVertexShader, bool hasFragmentShader)
-    : Shader(hasVertexShader, hasFragmentShader) { }
+    : ShaderBase(hasVertexShader, hasFragmentShader) { }
 
 std::vector<char> ResourceShader::retrieveVertexShader() {
     return readFile(getVertexSource());
@@ -242,7 +273,20 @@ RectStageBuffer::RectStageBuffer(
 
 // ---- RectShader ---- //
 RectShader::RectShader()
-    : Shader(true, true) { } 
+    : ShaderBase(true, true) { }
+
+RectShader::RectShader(RectShader &&sh) : ShaderBase(std::move(sh)),
+    uniformTexture(std::exchange(sh.uniformTexture, -1)),
+    uniformTransform(std::exchange(sh.uniformTransform, -1)) { }
+
+
+RectShader& lt::render::RectShader::operator=(RectShader &&sh)
+{
+    ShaderBase::operator=(std::move(sh));
+    uniformTexture = std::exchange(sh.uniformTexture, -1);
+    uniformTransform =std::exchange(sh.uniformTransform, -1);
+    return *this;
+}
 
 void RectShader::render(const RenderList<TransformableEntity2D>& renderList) {
     bind();
@@ -275,16 +319,6 @@ void RectShader::initializeUniforms() {
 
 // ---- SimpleShader ---- //
 
-SimpleShader::SimpleShader()
-    : Shader(true, true) { }
-
-void SimpleShader::render()
-{
-    // TODO
-}
-
-void SimpleShader::initializeUniforms() {}
-
 // ---- SimpleMVPShader ---- //
 
 MVPBatchStageBuffer::MVPBatchStageBuffer(
@@ -299,10 +333,22 @@ MVPListStageBuffer::MVPListStageBuffer(
 
 
 SimpleMVPShader::SimpleMVPShader()
-    : Shader(true, true) { }
+    : ShaderBase(true, true) { }
+
+SimpleMVPShader::SimpleMVPShader(SimpleMVPShader&& sh) : ShaderBase(std::move(sh)),
+    location_mvp(std::exchange(sh.location_mvp, -1))
+{
+}
 
 void SimpleMVPShader::initializeUniforms() {
     location_mvp = uniformLocation("mvp");
+}
+
+SimpleMVPShader& lt::render::SimpleMVPShader::operator=(SimpleMVPShader&& sh)
+{
+    ShaderBase::operator=(std::move(sh));
+    location_mvp = std::exchange(sh.location_mvp, -1);
+    return *this;
 }
 
 // TODO
@@ -336,8 +382,33 @@ PhongBatchStageBuffer::PhongBatchStageBuffer(
     : camera(pCamera), renderList(pRenderList),
     lightPosition(pLightPosition), lightColor(pLightColor) { }
 
+// ---- PhongShader ---- //
 PhongShader::PhongShader()
-    : Shader(true, true) { }
+    : ShaderBase(true, true) { }
+
+PhongShader::PhongShader(PhongShader&& sh) : ShaderBase(std::move(sh)),
+    uniformModelViewTransformPhong(std::exchange(sh.uniformModelViewTransformPhong, -1)),
+    uniformProjectionTransformPhong(std::exchange(sh.uniformProjectionTransformPhong, -1)),
+    uniformNormalTransformPhong(std::exchange(sh.uniformNormalTransformPhong, -1)),
+    uniformMaterialPhong(std::exchange(sh.uniformMaterialPhong, -1)),
+    uniformLightPositionPhong(std::exchange(sh.uniformLightPositionPhong, -1)),
+    uniformLightColorPhong(std::exchange(sh.uniformLightColorPhong, -1)),
+    uniformTextureSamplerPhong(std::exchange(sh.uniformTextureSamplerPhong, -1))
+{
+}
+
+PhongShader& PhongShader::operator=(PhongShader&& sh)
+{
+    ShaderBase::operator=(std::move(sh));
+    uniformModelViewTransformPhong = std::exchange(sh.uniformModelViewTransformPhong, -1);
+    uniformProjectionTransformPhong =std::exchange(sh.uniformProjectionTransformPhong, -1);
+    uniformNormalTransformPhong = std::exchange(sh.uniformNormalTransformPhong, -1);
+    uniformMaterialPhong =std::exchange(sh.uniformMaterialPhong, -1);
+    uniformLightPositionPhong = std::exchange(sh.uniformLightPositionPhong, -1);
+    uniformLightColorPhong = std::exchange(sh.uniformLightColorPhong, -1);
+    uniformTextureSamplerPhong = std::exchange(sh.uniformTextureSamplerPhong, -1);
+    return *this;
+}
 
 void PhongShader::initializeUniforms() {
     uniformModelViewTransformPhong = uniformLocation("modelViewTransform");
@@ -549,17 +620,13 @@ std::vector<char> MemoryRectShader::retrieveVertexShader()
     return toArray(vert);
 }
 
-std::vector<char> SimpleMemoryShader::retrieveVertexShader()
-{
-    return std::vector<char>();
-}
-
-std::vector<char> SimpleMemoryShader::retrieveFragmentShader()
-{
-    return std::vector<char>();
-}
-
 TriangleShader::TriangleShader() { }
+TriangleShader::TriangleShader(TriangleShader&& sh) : ShaderBase(std::move(sh)) {}
+
+TriangleShader& TriangleShader::operator=(TriangleShader&& sh) {
+    ShaderBase::operator=(std::move(sh));
+    return *this;
+}
 
 void TriangleShader::initializeUniforms()
 {
@@ -593,7 +660,7 @@ std::vector<char> TriangleMemoryShader::retrieveFragmentShader()
     return toArray(frag);
 }
 
-std::vector<char> lt::render::shader::SimpleMVPMemoryShader::retrieveVertexShader()
+std::vector<char> SimpleMVPMemoryShader::retrieveVertexShader()
 {
     const char * vert = R"(
     #version 330 core
@@ -611,7 +678,7 @@ std::vector<char> lt::render::shader::SimpleMVPMemoryShader::retrieveVertexShade
     return toArray(vert);
 }
 
-std::vector<char> lt::render::shader::SimpleMVPMemoryShader::retrieveFragmentShader()
+std::vector<char> SimpleMVPMemoryShader::retrieveFragmentShader()
 {
     const char * frag = R"(
     #version 330 core
@@ -626,7 +693,17 @@ std::vector<char> lt::render::shader::SimpleMVPMemoryShader::retrieveFragmentSha
 }
 
 LineShader::LineShader()
-    : Shader(true, true) { }
+    : ShaderBase(true, true) { }
+
+LineShader::LineShader(LineShader&& sh) : ShaderBase(std::move(sh)),
+    uniformMVP(std::exchange(sh.uniformMVP, -1)) { }
+
+LineShader& LineShader::operator=(LineShader&& sh)
+{
+    ShaderBase::operator=(std::move(sh));
+    uniformMVP = std::exchange(sh.uniformMVP, -1);
+    return *this;
+}
 
 void LineShader::initializeUniforms()
 {
@@ -685,7 +762,7 @@ LineStageBuffer::LineStageBuffer(
     : renderList(list) { }
 
 // Explicit instantiations
-template class lt::render::shader::RenderList<Entity>;
-template class lt::render::shader::RenderBatch<Entity>;
-template class lt::render::shader::RenderList<Entity2D>;
-template class lt::render::shader::RenderBatch<Entity2D>;
+template class lt::render::RenderList<Entity>;
+template class lt::render::RenderBatch<Entity>;
+template class lt::render::RenderList<Entity2D>;
+template class lt::render::RenderBatch<Entity2D>;

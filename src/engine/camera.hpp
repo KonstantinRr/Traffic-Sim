@@ -1,16 +1,17 @@
-/// BEGIN LICENSE
-///
-/// Copyright 2020 Konstantin Rolf <konstantin.rolf@gmail.com>
-/// Permission is hereby granted, free of charge, to any person obtaining a copy of
-/// this software and associated documentation files (the "Software"), to deal in
-/// the Software without restriction, including without limitation the rights to
-/// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-/// of the Software, and to permit persons to whom the Software is furnished to do
-/// so, subject to the following conditions:
-///
+/// MIT License
+/// 
+/// Copyright (c) 2020 Konstantin Rolf
+/// 
+/// Permission is hereby granted, free of charge, to any person obtaining a copy
+/// of this software and associated documentation files (the "Software"), to deal
+/// in the Software without restriction, including without limitation the rights
+/// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+/// copies of the Software, and to permit persons to whom the Software is
+/// furnished to do so, subject to the following conditions:
+/// 
 /// The above copyright notice and this permission notice shall be included in all
 /// copies or substantial portions of the Software.
-///
+/// 
 /// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 /// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 /// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -18,8 +19,9 @@
 /// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE.
-///
-/// END LICENSE
+/// 
+/// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
+/// July 2020
 
 #ifndef CAMERA_H
 #define CAMERA_H
@@ -30,8 +32,10 @@ namespace lt {
 namespace render {
 
 /// <summary>
-/// A three dimensional camera that can be used to manipulate the view position, angle, fov, aspect ratio
-/// as well as the near and far plane. The camera settings can be exported as a 4x4 matrix giving the transformation.
+/// A three dimensional camera that can be used to emulate an view position, angle, fov, aspect ratio
+/// as well as the near and far plane. The camera settings can be exported as a 4x4 matrix applying
+/// the defined transformation. The matrix is not buffered and recalculated for every call. See
+/// MatrixBufferedCamera for an implementation that caches the matrix.
 /// </summary>
 class Camera {
 protected:
@@ -39,49 +43,55 @@ protected:
     glm::vec3 position, rotation;
 
 public:
-    /// Creates a camera using the neccessary render settings.
-    /// Position and rotation is set to the default value 0.
-    /// nearPlane:      The camera's near plane
-    /// farPlane:       The camera's far plane
-    /// fov:            The field of view angle in radians
-    /// aspectRation:   The viewports's aspect ratio
+
+    /// <summary>
+    /// Creates a camera using the given render settings. Position and rotation are
+    /// initialized with a the default value of (0, 0, 0).
+    /// </summary>
+    /// <param name="nearPlane">The camera's near plane</param>
+    /// <param name="farPlane">The camera's far plane</param>
+    /// <param name="fov">The field of view angle in radians</param>
+    /// <param name="aspectRatio">The viewports's aspect ratio</param>
     Camera(
         float nearPlane, float farPlane,
         float fov, float aspectRatio);
 
-    /// Creates a camera using the neccessary render settings
-    /// with a custom position and rotation.
-    /// nearPlane:      The camera's near plane
-    /// farPlane:       The camera's far plane
-    /// fov:            The field of view angle in radians
-    /// aspectRation:   The viewport's aspect ratio
-    /// position:       The camera's position
-    /// rotation:       The camera's rotation
+    /// <summary>
+    /// Creates a camera using the given render settings.
+    /// </summary>
+    /// <param name="nearPlane">The camera's near plane</param>
+    /// <param name="farPlane">The camera's far plane</param>
+    /// <param name="fov">The field of view angle in radians</param>
+    /// <param name="aspectRatio">The viewport's aspect ratio</param>
+    /// <param name="position">The camera's position</param>
+    /// <param name="rotation">The camera's rotation</param>
     Camera(
         float nearPlane, float farPlane,
         float fov, float aspectRatio,
         const glm::vec3 &position,
         const glm::vec3 &rotation);
     
-    /// Creates a camera using the neccessary render settings
-    /// with a custom position and rotation.
-    /// nearPlane:      The camera's near plane
-    /// farPlane:       The camera's far plane
-    /// fov:            The field of view angle in radians
-    /// aspectRation:   The viewport's aspect ratio
-    /// roll:           The camera's roll angle. Same as rotation[0]
-    /// pitch:          The camera's pitch angle. Same as rotation[1]
-    /// yaw:            The camera's yaw angle. Same as rotation[2]
+    /// <summary
+    /// Creates a camera using the given render settings.
+    /// </summary>
+    /// <param name="nearPlane">The camera's near plane</param>
+    /// <param name="farPlane">The camera's far plane</param>
+    /// <param name="fov">The field of view angle in radians</param>
+    /// <param name="aspectRatio">The viewport's aspect ratio</param>
+    /// <param name="position">The camera's position</param>
+    /// <param name="roll">The camera's roll angle, same as rotation[0]</param>
+    /// <param name="pitch">The camera's pitch angle, same as rotation[1]</param>
+    /// <param name="yaw">The camera's yaw angle, same as rotation[2]</param>
     Camera(
         float nearPlane, float farPlane,
         float fov, float aspectRatio,
         const glm::vec3 &position,
         float roll, float pitch, float yaw);
     
-    /// Superclasses should always make their destructor virtual
+    /// <summary>Superclasses should always make their destructor virtual</summary>
     virtual ~Camera() = default;
 
-    /* Render Parameters */
+    // ---- Render Parameters ---- //
     /// Allows manipulating the basic render parameters
     virtual Camera& setNearPlane(float nearPlane);
     virtual Camera& setFarPlane(float farPlane);

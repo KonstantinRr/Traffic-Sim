@@ -1,16 +1,17 @@
-/// BEGIN LICENSE
-///
-/// Copyright 2020 Konstantin Rolf <konstantin.rolf@gmail.com>
-/// Permission is hereby granted, free of charge, to any person obtaining a copy of
-/// this software and associated documentation files (the "Software"), to deal in
-/// the Software without restriction, including without limitation the rights to
-/// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-/// of the Software, and to permit persons to whom the Software is furnished to do
-/// so, subject to the following conditions:
-///
+/// MIT License
+/// 
+/// Copyright (c) 2020 Konstantin Rolf
+/// 
+/// Permission is hereby granted, free of charge, to any person obtaining a copy
+/// of this software and associated documentation files (the "Software"), to deal
+/// in the Software without restriction, including without limitation the rights
+/// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+/// copies of the Software, and to permit persons to whom the Software is
+/// furnished to do so, subject to the following conditions:
+/// 
 /// The above copyright notice and this permission notice shall be included in all
 /// copies or substantial portions of the Software.
-///
+/// 
 /// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 /// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 /// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -18,8 +19,11 @@
 /// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE.
-///
-/// END LICENSE
+/// 
+/// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
+/// July 2020
+
+#pragma once
 
 #ifndef SHADER_HPP
 #define SHADER_HPP
@@ -27,14 +31,15 @@
 #include "com.h"
 #include <glm/glm.hpp>
 
-#include <string>
-#include <vector>
-#include <memory>
+#include <string> // usage: std::string
+#include <vector> // usage: std::vector
+#include <memory> // usage: std::shared_ptr
 
 #include "entity.hpp"
 #include "camera.hpp"
 
-namespace lt::render::shader {
+namespace lt::render
+{
 	/// <summary>
 	/// A general interface that defines the capability of rendering objects.
 	/// </summary>
@@ -49,7 +54,7 @@ namespace lt::render::shader {
 	/// which shaders need to be build (Fragment, Vertex, Geometry). The fragment and vertex shaders are required
 	/// to build a complete shader pipeline.
 	/// </summary>
-	class Shader {
+	class ShaderBase {
 	protected:
 		/// <summary>The OpenGL program ID that is generated</summary>
 		GLuint program;
@@ -66,17 +71,24 @@ namespace lt::render::shader {
 		/// <summary>Private cleanup function taking care of freeing all allocated OpenGL shader resources.</summary>
 		/// <param name="vertex_shader">ID of the OpenGL vertex shader program</param>
 		/// <param name="fragment_shader">ID of the OpenGL fragment shader program</param>
-		void cleanup(
+		void cleanupParts(
 			GLuint vertex_shader,
 			GLuint fragment_shader);
 
 	public:
 		/// Initializes a new shader unit with the given specs.
 		/// This does not create the shader yet.
-		Shader(
+		ShaderBase(
 			bool hasVertexShader=true,
 			bool hasFragmentShader=true);
-		virtual ~Shader() = default;
+		ShaderBase(const ShaderBase&) = delete; 
+		ShaderBase(ShaderBase &&sh);
+
+		ShaderBase& operator=(const ShaderBase&) = delete;
+		ShaderBase& operator=(ShaderBase &&sh);
+
+		virtual ~ShaderBase();
+		void cleanUp();
 
 		/// Invokes the shader creation process. This is
 		void create();
@@ -128,7 +140,7 @@ namespace lt::render::shader {
 	/// It defines two additional abstract methods that need to be implemented to gain the filenames that
 	/// need to be loaded by the ResourceShader.
 	/// </summary>
-	class ResourceShader : public Shader {
+	class ResourceShader : public ShaderBase {
 	public:
 		ResourceShader(bool hasVertexShader, bool hasFragmentShader);
 		virtual ~ResourceShader() = default;
@@ -137,19 +149,19 @@ namespace lt::render::shader {
 		virtual std::string getVertexSource() = 0;
 		virtual std::string getFragmentSource() = 0;
 
-		// ---- Shader implementation ---- //
+		// ---- ShaderBase implementation ---- //
 		virtual std::vector<char> retrieveVertexShader();
 		virtual std::vector<char> retrieveFragmentShader();
 	};
 
 	/// <summary>
-	/// This class defines a component of a render pipeline. It consists of a Shader object and a StageComponent.
-	/// The StageComponent is responsible of delivering the data to the Shader class. Both classes allow a clean
-	/// separation between the rendering process and the data that is being rendered. The Shader object must be
+	/// This class defines a component of a render pipeline. It consists of a ShaderBase object and a StageComponent.
+	/// The StageComponent is responsible of delivering the data to the ShaderBase class. Both classes allow a clean
+	/// separation between the rendering process and the data that is being rendered. The ShaderBase object must be
 	/// able to accept an argument of the class StageType to its render function.
 	/// </summary>
 	/// <typeparam name="StageType">Template class of the StageBuffer component</typeparam>
-	/// <typeparam name="ShaderType">Template class of the Shader component</typeparam>
+	/// <typeparam name="ShaderType">Template class of the ShaderBase component</typeparam>
 	template<typename StageType, typename ShaderType>
 	class RenderComponent : public Renderable {
 	protected:
@@ -159,8 +171,8 @@ namespace lt::render::shader {
 	public:
 		RenderComponent() = default;
 
-		/// <summary>Creates a new RenderComponent that uses the given Shader object. </summary>
-		/// <param name="pShader">Shader object used by this RenderComponent</param>
+		/// <summary>Creates a new RenderComponent that uses the given ShaderBase object. </summary>
+		/// <param name="pShader">ShaderBase object used by this RenderComponent</param>
 		RenderComponent(const std::shared_ptr<ShaderType>& pShader)
 			: shader(pShader) { }
 		
@@ -174,7 +186,7 @@ namespace lt::render::shader {
 		/// <returns>A reference to the currently active StageBuffer</returns>
 		const StageType& stageBuffer() const { return vStageBuffer; }
 
-		/// <summary>Implementation of the Renderable interface. Forwards the call to the Shader using the
+		/// <summary>Implementation of the Renderable interface. Forwards the call to the ShaderBase using the
 		/// StageBuffer object as argument. </summary>
 		virtual void render() { shader->render(vStageBuffer); }
 	};
@@ -260,7 +272,7 @@ namespace lt::render::shader {
 	};
 
 	///////////////////////////////////////////////
-	// ---- Specific Shader Implementations ---- //
+	// ---- Specific ShaderBase Implementations ---- //
 	// LineShader
 	// TriangleShader
 	// RectShader
@@ -269,7 +281,7 @@ namespace lt::render::shader {
 	// PhongShader
 
 	///////////////////////////
-	// ---- Line Shader ---- //
+	// ---- Line ShaderBase ---- //
 
 	/// <summary>The StageBuffer class for the LineShader object. </summary>
 	struct LineStageBuffer {
@@ -282,12 +294,18 @@ namespace lt::render::shader {
 	/// <summary>
 	/// This class renders a simple vertex model with colors.
 	/// </summary>
-	class LineShader : public Shader {
+	class LineShader : public ShaderBase {
 	protected:
 		GLint uniformMVP;
 
 	public:
-		LineShader();
+		explicit LineShader();
+		virtual ~LineShader() = default;
+		LineShader(const LineShader&) = delete;
+		LineShader(LineShader &&sh);
+
+		LineShader& operator=(const LineShader&) = delete;
+		LineShader& operator=(LineShader &&sh);
 
 		virtual void initializeUniforms();
 
@@ -302,11 +320,17 @@ namespace lt::render::shader {
 		virtual std::vector<char> retrieveFragmentShader();
 	};
 
-	// ---- Triangle Shader ---- //
+	// ---- Triangle ShaderBase ---- //
 
-	class TriangleShader : public Shader {
+	class TriangleShader : public ShaderBase {
 	public:
 		explicit TriangleShader();
+		virtual ~TriangleShader() = default;
+		TriangleShader(const TriangleShader&) = delete;
+		TriangleShader(TriangleShader &&sh);
+
+		TriangleShader& operator=(const TriangleShader&) = delete;
+		TriangleShader& operator=(TriangleShader &&sh);
 
 		virtual void initializeUniforms();
 	};
@@ -325,13 +349,19 @@ namespace lt::render::shader {
 		explicit RectStageBuffer(const std::shared_ptr<RenderList<TransformableEntity2D>>& list);
 	};
 
-	class RectShader : public Shader {
+	class RectShader : public ShaderBase {
 	protected:
 		GLint uniformTexture;
 		GLint uniformTransform;
 
 	public:
 		explicit RectShader();
+		virtual ~RectShader() = default;
+		RectShader(const RectShader &) = delete;
+		RectShader(RectShader &&sh);
+
+		RectShader& operator=(const RectShader&) = delete;
+		RectShader& operator=(RectShader &&sh);
 
 		void render(const RenderList<TransformableEntity2D>& renderList);
 		void render(const RectStageBuffer& stageBuffer);
@@ -343,26 +373,6 @@ namespace lt::render::shader {
 	};
 
 	class MemoryRectShader : public RectShader {
-	public:
-		virtual std::vector<char> retrieveVertexShader();
-		virtual std::vector<char> retrieveFragmentShader();
-	};
-
-	// ---- SimpleShader ---- //
-
-	class SimpleShader : public Shader {
-	protected:
-		std::string fragment_source, vertex_source;
-	public:
-		explicit SimpleShader();
-
-		void render();
-
-		// Inherited from Shader
-		virtual void initializeUniforms();
-	};
-
-	class SimpleMemoryShader : public SimpleShader {
 	public:
 		virtual std::vector<char> retrieveVertexShader();
 		virtual std::vector<char> retrieveFragmentShader();
@@ -390,12 +400,18 @@ namespace lt::render::shader {
 			const std::shared_ptr<RenderList<Entity>>& list);
 	};
 
-	class SimpleMVPShader : public Shader {
+	class SimpleMVPShader : public ShaderBase {
 	protected:
 		GLint location_mvp;
 
 	public:
 		explicit SimpleMVPShader();
+		virtual ~SimpleMVPShader() = default;
+		SimpleMVPShader(const SimpleMVPShader &) = delete;
+		SimpleMVPShader(SimpleMVPShader &&sh);
+
+		SimpleMVPShader& operator=(const SimpleMVPShader&) = delete;
+		SimpleMVPShader& operator=(SimpleMVPShader &&sh);
 
 		void render(const Camera& camera, const RenderList<Entity>& list);
 		void render(const Camera& camera, const RenderBatch<Entity>& batch);
@@ -441,7 +457,7 @@ namespace lt::render::shader {
 			const glm::vec3& lightPosition, const glm::vec3& lightColor);
 	};
 
-	class PhongShader : public Shader {
+	class PhongShader : public ShaderBase {
 	protected:
 		GLint uniformModelViewTransformPhong;
 		GLint uniformProjectionTransformPhong;
@@ -453,8 +469,14 @@ namespace lt::render::shader {
 
 	public:
 		explicit PhongShader();
+		virtual ~PhongShader() = default;
+		PhongShader(const PhongShader&) = delete;
+		PhongShader(PhongShader &&sh);
 
-		// Inherited from Shader
+		PhongShader& operator=(const PhongShader&) = delete;
+		PhongShader& operator=(PhongShader &&sh);
+
+		// Inherited from ShaderBase
 		virtual void initializeUniforms();
 
 		void render(const Camera& camera, const RenderList<Entity>& list,
