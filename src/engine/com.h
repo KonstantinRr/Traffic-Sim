@@ -88,9 +88,6 @@ bool lt_check_gl_error(const char* cmd, int line, const char* file);
     #ifndef NANOGUI_USE_OPENGL
         #define NANOGUI_USE_OPENGL
     #endif
-    #ifndef NANOGUI_GLAD
-        #define NANOGUI_GLAD
-    #endif
     #include <nanogui/screen.h>
     #include <nanogui/opengl.h>
     #include <nanogui/window.h>

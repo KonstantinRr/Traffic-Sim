@@ -38,11 +38,12 @@
 #include <sstream>
 #include <stdlib.h>
 #include <stdio.h>
+
+
 #include "resource.h"
 
 using namespace lt;
 using namespace lt::resource;
-
 
 std::vector<char> lt::resource::readFile(const std::string &file) {
 	spdlog::info("Opening resource {}", file);

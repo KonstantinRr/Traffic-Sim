@@ -102,7 +102,7 @@ int main(int argc, char** argv)
 		nanogui::init();
 		{
 			nanogui::ref<TrafficApplication> app = new TrafficApplication();
-			app->draw_all();
+			//app->draw_all();
 			app->set_visible(true);
 			nanogui::mainloop((float)(1.0 / 60.0 * 1000.0));
 		}
@@ -127,10 +127,10 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	Vector2i(800, 600), "TrafficSim",
 	true, 	// Resizeable
 	false,  // Fullscreen,
-	false, 	// Depth buffer
-	false, 	// Stencil buffer
+	true, 	// Depth buffer
+	true, 	// Stencil buffer
 	false, 	// Float buffer
-	3U, 	// GL Major version
+	4U, 	// GL Major version
 	2U 		// GL Minor version
 ) {
 	using namespace nanogui;
@@ -149,7 +149,7 @@ TrafficApplication::TrafficApplication() : nanogui::Screen(
 	uiPath = new MapDialogPath(this, {10, 10}, world.get(), m_canvas.get(), uiContext.get());
 
 	// Loads the default map
-	bool loadDefault = true;
+	bool loadDefault = false;
 	if (loadDefault) {
 		world->loadMap("maps/warendorf.xmlmap");
 		m_canvas->loadMap(world->getMap());

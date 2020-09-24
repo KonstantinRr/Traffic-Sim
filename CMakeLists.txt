@@ -25,45 +25,46 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(NANOGUI_BUILD_EXAMPLES ON CACHE BOOL "Build examples")
 set(NANOGUI_BUILD_PYTHON OFF CACHE BOOL "Build Python")
 set(NANOGUI_BUILD_SHARED OFF CACHE BOOL "Build Shared")
+set(NANOGUI_BUILD_GLAD ON CACHE BOOL "Build GLAD")
 set(SPDLOG_FMT_EXTERNAL ON)
 
 # All source files in this project
 set(SOURCE
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp                  "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/mapcanvas.cpp             "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/geom.cpp          "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm.cpp           "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm_mesh.cpp      "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/parser.cpp        "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/render.cpp        "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm_graph.cpp     "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/agent.cpp         "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/engine.cpp        "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/camera.cpp         "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/com.cpp            "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/entity.cpp         "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/glmodel.cpp        "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/graphics.cpp       "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/resource.cpp       "
-   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/shader.cpp         "
+   "${CMAKE_CURRENT_SOURCE_DIR}/nanogui/ext/glad/src/glad.c"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/mapcanvas.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/geom.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm_mesh.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/parser.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/render.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/agent.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm_graph.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/engine.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/camera.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/com.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/entity.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/glmodel.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/graphics.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/resource.cpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/shader.cpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/src/engine/tiny_obj_loader.cpp"
 )
 # All header files in this project
 set(HEADERS
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/mapcanvas.h
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/listener.h
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/agent.h
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/engine.h
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/geom.h
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm.h
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm_graph.h
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm_mesh.h
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/parser.hpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/render.hpp
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/mapcanvas.h"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/listener.h"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/agent.h"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/engine.h"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/geom.h"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm.h"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm_graph.h"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/osm_mesh.h"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/parser.hpp"
+   "${CMAKE_CURRENT_SOURCE_DIR}/src/traffic/render.hpp"
 )
 
 # Prefer libc++ in conjunction with Clang
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions -fcxx-exceptions")
 if (NOT MSVC)
   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_FLAGS MATCHES "-stdlib=libc\\+\\+")
     CHECK_CXX_COMPILER_AND_LINKER_FLAGS_BASE(HAS_LIBCPP "-stdlib=libc++" "-stdlib=libc++")
@@ -103,10 +104,8 @@ target_include_directories(Controller PUBLIC
 
 # Links the required subdirectories
 add_subdirectory(nanogui)
-target_link_libraries(Controller PRIVATE nanogui)
-
+target_link_libraries(Controller PUBLIC nanogui)
 add_subdirectory(fmt)
-target_link_libraries(Controller PRIVATE fmt::fmt)
-
+target_link_libraries(Controller PUBLIC fmt::fmt)
 #add_subdirectory(spdlog)
 #target_link_libraries(Controller PRIVATE spdlog::spdlog)
