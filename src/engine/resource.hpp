@@ -26,7 +26,7 @@
 #ifndef RESOURCE_HPP
 #define RESOURCE_HPP
 
-#include "com.h"
+#include "module.hpp"
 #include "tiny_obj_loader.hpp"
 
 #include <stdlib.h>
@@ -135,6 +135,10 @@ namespace resource {
         std::vector<int> v_indices;
         std::vector<int> vt_indices;
 
+    private:
+        template<typename Type>
+        size_t findClosestIndex(Type &&exec) const;
+
     public:
         enum ExportType { VERTEX, TEXTURE, COLOR };
 
@@ -182,9 +186,29 @@ namespace resource {
 
         float maxExtent() const;
         float minExtent() const;
+        size_t maxExtentIndex() const;
+        size_t minExtentIndex() const;
 
-        void scale(float scale);
-        void unitize(float unitScale=1.0f);
+        // Values calculated as ABS
+        float maxXExtent() const;
+        float minXExtent() const;
+        float maxYExtent() const;
+        float minYExtent() const;
+
+        size_t maxXExtentIndex() const;
+        size_t minXExtentIndex() const;
+        size_t maxYExtentIndex() const;
+        size_t minYExtentIndex() const;
+
+        glm::vec2 center() const;
+
+        MeshBuilder2D& scale(float scale);
+        MeshBuilder2D& scale(float scaleX, float scaleY);
+        MeshBuilder2D& translate(glm::vec2 translation);
+        //void rotate(glm::vec2 rotation);
+
+        void unitize(float unitScale=1.0f, bool keepProportion=true);
+        void centerModel();
 
         void addVertex(glm::vec2 vertex);
         void addTextureCoord(glm::vec2 texture);

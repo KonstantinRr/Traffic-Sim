@@ -23,14 +23,40 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
-#include "main.hpp"
+#pragma once
 
-int main(int argc, char** argv)
+#ifndef LT_WINDOW_HPP
+#define LT_WINDOW_HPP
+
+#include "module.hpp"
+#include <GLFW/glfw3.h>
+#include "shader.hpp"
+
+namespace lt
 {
-#ifdef LT_GLFW_BACKEND
-    return main_engine(argc, argv);
-#elif LT_NANOGUI_BACKEND
-    return main_nanogui(argc, argv);
-#endif
-    return -1;
+    class SizedObject {
+    public:
+        virtual int width();
+        virtual int height();
+
+        void setWidth(int width);
+        void setHeight(int height);
+    protected:
+        int w, h;
+    };
+
+    class Engine {
+    public:
+        void init(const std::string &name, size_t width, size_t height);
+        void mainloop();
+        void exit();
+
+        void setPipeline(lt::render::Renderable *pipeline);
+
+    protected:
+        lt::render::Renderable *k_pipeline = nullptr;
+        GLFWwindow* k_window = nullptr;
+    };
 }
+
+#endif

@@ -28,15 +28,15 @@
 #ifndef SHADER_HPP
 #define SHADER_HPP
 
-#include "com.h"
+#include "module.hpp"
+#include "entity.hpp"
+#include "camera.hpp"
+
 #include <glm/glm.hpp>
 
 #include <string> // usage: std::string
 #include <vector> // usage: std::vector
 #include <memory> // usage: std::shared_ptr
-
-#include "entity.hpp"
-#include "camera.hpp"
 
 namespace lt::render
 {

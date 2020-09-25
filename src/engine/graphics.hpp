@@ -28,6 +28,8 @@
 #ifndef GRAPHICS_HPP
 #define GRAPHICS_HPP
 
+#include "module.hpp"
+
 #include <vector>
 #include <array>
 #include <limits>

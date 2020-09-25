@@ -25,72 +25,15 @@
 
 #pragma once
 
-#ifndef LISTENER_HPP
-#define LISTENER_HPP
+#ifndef MAIN_HPP
+#define MAIN_HPP
 
+// Includes the main component headers
+#include "engine/module.hpp"
 #include "traffic/engine.h"
 
-#include <vector>
-
-template<typename Type>
-struct CallbackForm {
-	int32_t id;
-	std::function<Type> function;
-
-	template<typename Param>
-	CallbackForm(int32_t id, Param && func)
-		: id(id), function(func) { }
-};
-
-template<typename Type>
-struct CallbackReturn {
-	int32_t id;
-	std::vector<CallbackForm<Type>> *parent;
-
-	CallbackReturn(int32_t id, std::vector<CallbackForm<Type>>* parent)
-		: id(id), parent(parent) { }
-
-	bool isActive() const { return id != -1; }
-	void remove() {
-		for (size_t i = 0; i < parent->size();) {
-			if ((*parent)[i].id == id) {
-				parent->erase(parent->begin() + i);
-			}
-			else {
-				i++;
-			}
-		}
-		id = -1;
-	}
-};
-
-template<typename Type>
-class Listener {
-protected:
-	std::vector<CallbackForm<Type>> callbacks;
-
-public:
-	template<typename FType>
-	CallbackReturn<Type> listen(FType && function) {
-		int32_t id = callbacks.empty() ? 0 : callbacks.back().id + 1;
-		callbacks.push_back(
-			CallbackForm<Type>(
-				id, std::function<Type>(function)
-			)
-		);
-		return CallbackReturn<Type>(id, &callbacks);
-	}
-
-	template<typename ... Args>
-	void trigger(Args&& ... args) {
-		for (const auto & ref : callbacks) {
-			ref.function(std::forward<Args>(args)...);
-		}
-	}
-
-	inline void clear() {
-		callbacks.clear();
-	}
-};
+int main_engine(int argc, char** argv);
+int main_nanogui(int argc, char** argv);
+int main(int argc, char** argv);
 
 #endif

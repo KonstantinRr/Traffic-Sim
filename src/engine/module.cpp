@@ -23,14 +23,51 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
-#include "main.hpp"
+#include "module.hpp"
 
-int main(int argc, char** argv)
-{
-#ifdef LT_GLFW_BACKEND
-    return main_engine(argc, argv);
-#elif LT_NANOGUI_BACKEND
-    return main_nanogui(argc, argv);
-#endif
-    return -1;
+bool lt_check_gl_error(const char *cmd, int line, const char *file) {
+     GLenum err = glGetError();
+     const char* msg = nullptr;
+
+     switch (err) {
+     case GL_NO_ERROR:
+         // printf("OK: %s\n", cmd);
+         return false;
+
+     case GL_INVALID_ENUM:
+         msg = "invalid enumeration";
+         break;
+
+     case GL_INVALID_VALUE:
+         msg = "invalid value";
+         break;
+
+     case GL_INVALID_OPERATION:
+         msg = "invalid operation";
+         break;
+
+     case GL_INVALID_FRAMEBUFFER_OPERATION:
+         msg = "invalid framebuffer operation";
+         break;
+
+     case GL_OUT_OF_MEMORY:
+         msg = "out of memory";
+         break;
+
+     case GL_STACK_UNDERFLOW:
+         msg = "stack underflow";
+         break;
+
+     case GL_STACK_OVERFLOW:
+         msg = "stack overflow";
+         break;
+
+     default:
+         msg = "unknown error";
+         break;
+     }
+
+     fprintf(stderr, "OpenGL error (%s) during operation \"%s\" at %s:%d!\n",
+        msg, cmd, file, line);
+     return true;
 }

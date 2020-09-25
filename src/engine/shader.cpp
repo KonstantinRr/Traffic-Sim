@@ -23,14 +23,14 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
-#include <iostream>
+#include "module.hpp"
+#include "shader.hpp"
+#include "resource.hpp"
+
 #include <spdlog/spdlog.h>
 #include <glm/gtc/type_ptr.hpp>
+
 #include <limits>
-
-#include "shader.hpp"
-
-#include "resource.hpp"
 
 using namespace lt;
 using namespace lt::render;
@@ -715,7 +715,9 @@ void LineShader::loadMVP(const glm::mat4x4& mat) { loadMat4x4(uniformMVP, mat); 
 void LineShader::render(const LineStageBuffer& stageBuffer)
 {
     bind();
-
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
+    
     for (const auto& entity : *(stageBuffer.renderList)) {
         loadMVP(entity->getTransform4D());
 

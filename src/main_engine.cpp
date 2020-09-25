@@ -24,13 +24,62 @@
 /// July 2020
 
 #include "main.hpp"
+#include <spdlog/spdlog.h>
 
-int main(int argc, char** argv)
-{
 #ifdef LT_GLFW_BACKEND
-    return main_engine(argc, argv);
-#elif LT_NANOGUI_BACKEND
-    return main_nanogui(argc, argv);
-#endif
-    return -1;
+
+#include <memory>
+#include <vector>
+
+#include "mapcanvas.h"
+
+#include "traffic/osm.h"
+#include "traffic/osm_graph.h"
+#include "traffic/osm_mesh.h"
+#include "traffic/parser.hpp"
+#include "traffic/render.hpp"
+#include "traffic/agent.h"
+
+#include "engine/window.hpp"
+
+using namespace lt;
+using namespace traffic;
+
+int main_engine(int argc, char** argv)
+{
+    spdlog::info("Starting Engine Backend");
+    Engine eng;
+    eng.init("Window", 800, 600);
+
+    auto manager = std::make_shared<ConcurrencyManager>();
+	auto world = std::make_shared<World>(manager.get());
+
+    SizedObject size;
+	size.setWidth(800);
+	size.setHeight(600);
+
+	auto m_canvas = std::make_shared<MapCanvas>(world->getMap(), &size);
+	m_canvas->setActive(true);
+
+	// Loads the default map
+	bool loadDefault = true;
+	if (loadDefault) {
+		world->loadMap("maps/warendorf.xmlmap");
+		m_canvas->loadMap(world->getMap());
+		m_canvas->loadHighwayMap(world->getHighwayMap());
+		m_canvas->setActive(true);
+	}
+
+    eng.setPipeline(m_canvas.get());
+    eng.mainloop();
+    eng.exit();
+
+    return 0;
 }
+#else
+int main_engine(int argc, char** argv)
+{
+    spdlog::error("Could not find Engine implementation!");
+    return 0;
+}
+#endif

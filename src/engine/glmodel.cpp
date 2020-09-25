@@ -23,6 +23,7 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
+#include "module.hpp"
 #include "glmodel.hpp"
 
 using namespace lt;

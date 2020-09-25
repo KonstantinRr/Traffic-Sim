@@ -28,7 +28,7 @@
 #ifndef GLMODEL_H
 #define GLMODEL_H
 
-#include "com.h"
+#include "module.hpp"
 
 #include <memory>
 #include <vector>

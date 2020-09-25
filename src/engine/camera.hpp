@@ -26,6 +26,8 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
+#include "module.hpp"
+
 #include <glm/glm.hpp>
 
 namespace lt {

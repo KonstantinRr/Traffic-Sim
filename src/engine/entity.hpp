@@ -28,7 +28,7 @@
 #ifndef ENTITY_H
 #define ENTITY_H
 
-#include "com.h"
+#include "module.hpp"
 
 #include <glm/glm.hpp>
 #include <memory>

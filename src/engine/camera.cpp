@@ -23,9 +23,8 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
+#include "module.hpp"
 #include "camera.hpp"
-
-#include <cmath>
 
 #include <glm/gtc/matrix_transform.hpp>
 

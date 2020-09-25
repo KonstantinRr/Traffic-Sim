@@ -55,7 +55,7 @@
 #include <atomic>
 #include <iostream>
 
-#include "robin_hood.h"
+#include <robin_hood.h>
 
 using float32 = float;
 using float64 = double;

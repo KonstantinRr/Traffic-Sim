@@ -23,14 +23,15 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
+#include "module.hpp"
+#include "graphics.hpp"
+
 #include <random>
 #include <stdlib.h>
 #include <math.h>
 #include <iostream>
 #include <chrono>
 #include <exception>
-
-#include "graphics.hpp"
 
 using namespace lt;
 

@@ -23,13 +23,14 @@
 /// Written by Konstantin Rolf (konstantin.rolf@gmail.com)
 /// July 2020
 
-#define _CRT_SECURE_NO_WARNINGS 1
-
+#include "module.hpp"
+#include "resource.h"
 #include "resource.hpp"
-#include <spdlog/spdlog.h>
 
+#include <spdlog/spdlog.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/norm.hpp>
 
 #include <limits>
 #include <cassert>
@@ -41,8 +42,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-
-#include "resource.h"
 
 using namespace lt;
 using namespace lt::resource;
@@ -155,31 +154,89 @@ void MeshBuilder2D::clear() {
 
 MeshBuilder2D::Exporter2D MeshBuilder2D::exporter() { return Exporter2D(this); }
 
-float MeshBuilder2D::maxExtent() const {
-	float length = std::numeric_limits<float>::min();
-	for (size_t i = 0; i < vertices.size(); i++) {
-		float testLength = static_cast<float>(vertices[i].length());
-		if (testLength > length) length = testLength;
+template<typename Type>
+size_t MeshBuilder2D::findClosestIndex(Type &&exec) const {
+	size_t current = 0;
+	for (size_t i = 1; i < vertices.size(); i++) {
+		if (exec(vertices[i], vertices[current]))
+			current = i;
 	}
-	return length;
-}
-float MeshBuilder2D::minExtent() const {
-	float length = std::numeric_limits<float>::max();
-	for (size_t i = 0; i < vertices.size(); i++) {
-		float testLength = static_cast<float>(vertices[i].length());
-		if (testLength < length) length = testLength;
-	}
-	return length;
+	return current;
 }
 
-void MeshBuilder2D::scale(float scale) {
-	for (size_t i = 0; i < vertices.size(); i++) {
+
+float MeshBuilder2D::maxExtent() const { return glm::length(vertices[maxExtentIndex()]); }
+float MeshBuilder2D::minExtent() const { return glm::length(vertices[minExtentIndex()]); }
+
+size_t MeshBuilder2D::minExtentIndex() const {
+	return findClosestIndex([](const glm::vec2 v1, const glm::vec2 v2) {
+		return glm::length2(v1) < glm::length2(v2); });
+}
+size_t MeshBuilder2D::maxExtentIndex() const {
+	return findClosestIndex([](const glm::vec2 v1, const glm::vec2 v2) {
+		return glm::length2(v1) > glm::length2(v2); });
+}
+// Single Coordinates
+size_t MeshBuilder2D::maxXExtentIndex() const {
+	return findClosestIndex([](const glm::vec2 v1, const glm::vec2 v2) {
+		return std::abs(v1.x) > std::abs(v2.x); });
+}
+size_t MeshBuilder2D::minXExtentIndex() const {
+	return findClosestIndex([](const glm::vec2 v1, const glm::vec2 v2) {
+		return std::abs(v1.x) < std::abs(v2.x); });
+}
+size_t MeshBuilder2D::maxYExtentIndex() const {
+	return findClosestIndex([](const glm::vec2 v1, const glm::vec2 v2) {
+		return std::abs(v1.y) > std::abs(v2.y); });
+}
+size_t MeshBuilder2D::minYExtentIndex() const {
+	return findClosestIndex([](const glm::vec2 v1, const glm::vec2 v2) {
+		return std::abs(v1.y) < std::abs(v2.y); });
+}
+float MeshBuilder2D::maxXExtent() const { return vertices[maxXExtentIndex()].x; }
+float MeshBuilder2D::minXExtent() const { return vertices[minXExtentIndex()].x; }
+float MeshBuilder2D::maxYExtent() const { return vertices[maxYExtentIndex()].y; }
+float MeshBuilder2D::minYExtent() const { return vertices[minYExtentIndex()].y; }
+
+glm::vec2 MeshBuilder2D::center() const {
+	glm::vec2 average = { 0.0f, 0.0f };
+	for (const glm::vec2 vec : vertices)
+		average += vec;
+	return average / static_cast<float>(vertices.size());
+}
+
+MeshBuilder2D& MeshBuilder2D::scale(float scale) {
+	for (size_t i = 0; i < vertices.size(); i++)
 		vertices[i] *= scale;
+	return *this;
+}
+
+MeshBuilder2D& MeshBuilder2D::scale(float scaleX, float scaleY) {
+	for (size_t i = 0; i < vertices.size(); i++) {
+		vertices[i].x *= scaleX;
+		vertices[i].y *= scaleY;
+	}
+	return *this;
+}
+
+MeshBuilder2D& MeshBuilder2D::translate(glm::vec2 translation) {
+	for (size_t i = 0; i < vertices.size(); i++)
+		vertices[i] += translation;
+}
+
+void MeshBuilder2D::unitize(float unitScale, bool keepProportion) {
+	if (keepProportion) {
+		scale(unitScale / maxExtent());
+	} else {
+		scale(
+			unitScale / maxXExtent(),
+			unitScale / maxYExtent()
+		);
 	}
 }
 
-void MeshBuilder2D::unitize(float unitScale) {
-	scale(unitScale / maxExtent());
+void MeshBuilder2D::centerModel() {
+	translate(-center());
 }
 
 void MeshBuilder2D::addVertex(glm::vec2 vertex) { vertices.push_back(vertex); }
